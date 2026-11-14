@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import { generateJsonWithGemini } from "@/lib/gemini.server";
 import { heuristicMapColumns, type ColumnUnitMappingResult } from "@/lib/table-parser";
-import { apiRateLimiter, getClientIp } from "@/lib/security";
+import {
+  apiRateLimiter,
+  getClientIp,
+  parseJsonWithLimit,
+  sanitizePromptText,
+  DEFAULT_MAX_BODY_BYTES,
+} from "@/lib/security";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 interface MapColumnsRequest {
   headers: string[];
@@ -53,7 +60,15 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = (await req.json()) as MapColumnsRequest;
+    const parseResult = await parseJsonWithLimit<MapColumnsRequest>(req, DEFAULT_MAX_BODY_BYTES);
+    if (parseResult.error || !parseResult.data) {
+      return NextResponse.json(
+        { error: parseResult.error || "Invalid request body." },
+        { status: parseResult.status || 400 }
+      );
+    }
+
+    const body = parseResult.data;
     if (!body || !Array.isArray(body.headers) || body.headers.length === 0) {
       return NextResponse.json(
         { error: "Invalid request: 'headers' array is required." },
@@ -61,14 +76,34 @@ export async function POST(req: Request) {
       );
     }
 
-    const { headers, sampleRows } = body;
+    // Guard against excessive array lengths (DoS)
+    if (body.headers.length > 50) {
+      return NextResponse.json(
+        { error: "Payload exceeds maximum allowed headers count of 50." },
+        { status: 400 }
+      );
+    }
+
+    const sanitizedHeaders = body.headers
+      .slice(0, 50)
+      .map((h) => sanitizePromptText(h, 60))
+      .filter(Boolean);
+
+    if (sanitizedHeaders.length === 0) {
+      return NextResponse.json(
+        { error: "No valid headers provided after sanitization." },
+        { status: 400 }
+      );
+    }
+
+    const sampleRows = Array.isArray(body.sampleRows) ? body.sampleRows.slice(0, 5) : [];
     const apiKey = process.env.GEMINI_API_KEY;
 
     // If Gemini API is configured, attempt intelligent mapping
     if (apiKey && apiKey !== "your_gemini_api_key_here") {
       try {
-        const userPrompt = `Headers: ${JSON.stringify(headers)}\nSample Rows:\n${JSON.stringify(
-          sampleRows?.slice(0, 3) || []
+        const userPrompt = `Headers: ${JSON.stringify(sanitizedHeaders)}\nSample Rows:\n${JSON.stringify(
+          sampleRows.slice(0, 3)
         )}`;
 
         const geminiResult = await generateJsonWithGemini<ColumnUnitMappingResult>({
@@ -90,7 +125,7 @@ export async function POST(req: Request) {
     }
 
     // Deterministic heuristic fallback
-    const heuristicResult = heuristicMapColumns(headers);
+    const heuristicResult = heuristicMapColumns(sanitizedHeaders);
     return NextResponse.json({
       source: "heuristic",
       mapping: heuristicResult,

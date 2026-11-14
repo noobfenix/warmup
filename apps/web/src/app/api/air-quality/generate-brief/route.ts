@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 import { generateCivicBrief, type GenerateBriefRequest } from "@/lib/gemini-brief.server";
-import { apiRateLimiter, getClientIp } from "@/lib/security";
+import {
+  apiRateLimiter,
+  getClientIp,
+  parseJsonWithLimit,
+  validateBriefParameters,
+  validateApiKeyFormat,
+  BRIEF_MAX_BODY_BYTES,
+} from "@/lib/security";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 export async function POST(req: Request) {
   const clientIp = getClientIp(req);
@@ -15,7 +23,15 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = (await req.json()) as GenerateBriefRequest;
+    const parseResult = await parseJsonWithLimit<GenerateBriefRequest>(req, BRIEF_MAX_BODY_BYTES);
+    if (parseResult.error || !parseResult.data) {
+      return NextResponse.json(
+        { error: parseResult.error || "Invalid request body." },
+        { status: parseResult.status || 400 }
+      );
+    }
+
+    const body = parseResult.data;
 
     if (!body || !Array.isArray(body.facts) || body.facts.length === 0) {
       return NextResponse.json(
@@ -24,20 +40,50 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!body.audience) {
-      body.audience = "ward_officer";
-    }
-    if (!body.language) {
-      body.language = "en";
-    }
-    if (!body.readingLevel) {
-      body.readingLevel = "standard";
+    // Guard against excessive array lengths (DoS / LLM context flooding)
+    if (body.facts.length > 50) {
+      return NextResponse.json(
+        { error: "Payload exceeds maximum allowed facts limit of 50." },
+        { status: 400 }
+      );
     }
 
-    // Support optional server-side session header override
+    if (body.flags && Array.isArray(body.flags) && body.flags.length > 100) {
+      return NextResponse.json(
+        { error: "Payload exceeds maximum allowed flags limit of 100." },
+        { status: 400 }
+      );
+    }
+
+    // Validate dissemination parameters against strict allowlists (anti-prompt-injection)
+    const paramValidation = validateBriefParameters({
+      audience: body.audience,
+      language: body.language,
+      readingLevel: body.readingLevel,
+    });
+
+    if (!paramValidation.valid || !paramValidation.params) {
+      return NextResponse.json(
+        { error: paramValidation.error || "Invalid brief parameters." },
+        { status: 400 }
+      );
+    }
+
+    body.audience = paramValidation.params.audience;
+    body.language = paramValidation.params.language;
+    body.readingLevel = paramValidation.params.readingLevel;
+
+    // Support optional server-side session header override with strict format validation
     const headerApiKey = req.headers.get("x-gemini-api-key");
     if (headerApiKey) {
-      body.customApiKey = headerApiKey;
+      const cleanHeaderKey = headerApiKey.trim();
+      if (!validateApiKeyFormat(cleanHeaderKey)) {
+        return NextResponse.json(
+          { error: "Invalid API key format provided in x-gemini-api-key header." },
+          { status: 400 }
+        );
+      }
+      body.customApiKey = cleanHeaderKey;
     }
 
     const auditedResult = await generateCivicBrief(body);
@@ -70,10 +116,12 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     console.error("Generate brief API error:", error);
+    // Sanitize error message to prevent accidental key or internal url leakage
+    const rawMsg = error instanceof Error ? error.message : "Failed to generate briefing.";
+    const safeMsg = rawMsg.replace(/AIza[0-9A-Za-z-_]{35}/g, "<REDACTED_KEY>");
+
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to generate briefing.",
-      },
+      { error: safeMsg },
       { status: 500 }
     );
   }

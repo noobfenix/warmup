@@ -21,7 +21,7 @@ import {
   ChevronUp,
   RotateCcw,
 } from "lucide-react";
-import { parseRawTableInput, normalizeTableData, type NormalizedRow } from "@/lib/table-parser";
+import { parseRawTableInput, normalizeTableData, heuristicMapColumns, type NormalizedRow } from "@/lib/table-parser";
 import { analyzeAirQualityData, type AnalysisOutput, type ComputedFact } from "@/lib/flags-and-facts";
 import { computeAirQualityDiff, type AirQualityDiff } from "@/lib/diff-engine";
 import type { CivicBriefResponse } from "@/lib/brief-validator";
@@ -85,7 +85,6 @@ export default function CivicStudioPage() {
         return;
       }
 
-      const { heuristicMapColumns } = require("@/lib/table-parser");
       const mapping = heuristicMapColumns(parsed.headers);
       const normalized = normalizeTableData(parsed, mapping);
       const analyzed = analyzeAirQualityData(normalized);

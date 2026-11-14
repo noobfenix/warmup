@@ -8,32 +8,39 @@ import {
 } from "./brief-validator";
 import type { ComputedFact, DataFlag, AnalysisOutput } from "./flags-and-facts";
 import type { AirQualityDiff } from "./diff-engine";
+import {
+  sanitizePromptText,
+  validateApiKeyFormat,
+  type AllowedAudience,
+  type AllowedLanguage,
+  type AllowedReadingLevel,
+} from "./security";
 
 export interface GenerateBriefRequest {
   facts: ComputedFact[];
   flags: DataFlag[];
   summary: AnalysisOutput["summary"];
-  audience: "ward_officer" | "housing_society" | "school";
-  language: "en" | "hi" | "mr" | "ta";
-  readingLevel: "executive" | "standard" | "accessible";
+  audience: AllowedAudience;
+  language: AllowedLanguage;
+  readingLevel: AllowedReadingLevel;
   diff?: AirQualityDiff | null;
   customApiKey?: string;
 }
 
-const AUDIENCE_NAMES: Record<string, string> = {
+const AUDIENCE_NAMES: Record<AllowedAudience, string> = {
   ward_officer: "Ward Officers & Municipal Administration",
   housing_society: "Housing Society Managing Committee & Residents",
   school: "School Principals, Physical Education Teachers & Parents",
 };
 
-const LANGUAGE_NAMES: Record<string, string> = {
+const LANGUAGE_NAMES: Record<AllowedLanguage, string> = {
   en: "English",
   hi: "Hindi (हिंदी)",
   mr: "Marathi (मराठी)",
   ta: "Tamil (தமிழ்)",
 };
 
-const READING_LEVEL_INSTRUCTIONS: Record<string, string> = {
+const READING_LEVEL_INSTRUCTIONS: Record<AllowedReadingLevel, string> = {
   executive: "Direct, high-impact, actionable bullet points emphasizing operational urgency, key metrics, and administrative directives.",
   standard: "Balanced civic briefing with contextual clarity, civic rationale, and structured public guidance.",
   accessible: "Plain language, simple conversational vocabulary, clear explanations without technical jargon, highly understandable for all community members.",
@@ -124,12 +131,13 @@ export const CIVIC_BRIEF_JSON_SCHEMA = {
 };
 
 /**
- * Builds the strict grounded system instruction and user prompt for Gemini.
+ * Builds the strict grounded system instruction and user prompt for Gemini with defensive sanitization.
  */
 function buildBriefPrompt(req: GenerateBriefRequest): { systemInstruction: string; prompt: string } {
-  const audienceLabel = AUDIENCE_NAMES[req.audience] || req.audience;
-  const langLabel = LANGUAGE_NAMES[req.language] || req.language;
-  const readingLevelGuide = READING_LEVEL_INSTRUCTIONS[req.readingLevel] || req.readingLevel;
+  // Use strictly mapped dictionaries to prevent prompt injection via unvalidated parameters
+  const audienceLabel = AUDIENCE_NAMES[req.audience] || AUDIENCE_NAMES.ward_officer;
+  const langLabel = LANGUAGE_NAMES[req.language] || LANGUAGE_NAMES.en;
+  const readingLevelGuide = READING_LEVEL_INSTRUCTIONS[req.readingLevel] || READING_LEVEL_INSTRUCTIONS.standard;
 
   const systemInstruction = `You are the Lead Environmental AI Analyst for the Civic Air Quality Briefing Studio.
 Your role is to produce high-integrity, audience-targeted, and actionable civic briefings based EXCLUSIVELY on verified tabular facts.
@@ -149,31 +157,59 @@ CRITICAL INVARIANTS & ETHICAL GUARDRAILS:
 8. NEVER HIDE FLAGGED DATA: If telemetry flags exist in the input, acknowledge them as open data quality observations.
 9. RETURN VALID JSON: Conforming strictly to the requested schema.`;
 
-  const factsListText = req.facts
-    .map(
-      (f) =>
-        `[${f.id}] (${f.category.toUpperCase()}) Station: "${f.station}" | Metric: ${f.metric}=${f.value} ${f.unit} ${
-          f.cpcbCategory ? `(CPCB: ${f.cpcbCategory})` : ""
-        } -> Statement: "${f.statement}" (Source Rows: ${f.sourceRowIndices.join(", ")})`
-    )
+  // Defensively bound and sanitize facts to prevent context explosion and prompt injection
+  const factsListText = (req.facts || [])
+    .slice(0, 35)
+    .map((f) => {
+      const cleanId = sanitizePromptText(f.id, 10);
+      const cleanCat = sanitizePromptText(f.category, 20).toUpperCase();
+      const cleanStation = sanitizePromptText(f.station, 60);
+      const cleanMetric = sanitizePromptText(f.metric, 20);
+      const cleanVal = typeof f.value === "number" ? f.value : sanitizePromptText(f.value, 20);
+      const cleanUnit = sanitizePromptText(f.unit, 15);
+      const cleanStmt = sanitizePromptText(f.statement, 250);
+      const cleanCpcb = f.cpcbCategory ? sanitizePromptText(f.cpcbCategory, 20) : "";
+      const cleanRows = Array.isArray(f.sourceRowIndices)
+        ? f.sourceRowIndices.slice(0, 20).join(", ")
+        : "";
+
+      return `[${cleanId}] (${cleanCat}) Station: "${cleanStation}" | Metric: ${cleanMetric}=${cleanVal} ${cleanUnit} ${
+        cleanCpcb ? `(CPCB: ${cleanCpcb})` : ""
+      } -> Statement: "${cleanStmt}" (Source Rows: ${cleanRows})`;
+    })
     .join("\n");
 
-  const flagsListText = req.flags
-    .map(
-      (fl) =>
-        `[${fl.id}] (${fl.type.toUpperCase()}) Station: "${fl.station}" | Row ${fl.sourceRowIndex} (${fl.column}='${fl.rawValue}'): ${fl.description}`
-    )
+  // Defensively bound and sanitize flags
+  const flagsListText = (req.flags || [])
+    .slice(0, 50)
+    .map((fl) => {
+      const cleanId = sanitizePromptText(fl.id, 10);
+      const cleanType = sanitizePromptText(fl.type, 20).toUpperCase();
+      const cleanStation = sanitizePromptText(fl.station, 60);
+      const cleanCol = sanitizePromptText(fl.column, 30);
+      const cleanRaw = sanitizePromptText(fl.rawValue, 30);
+      const cleanDesc = sanitizePromptText(fl.description, 200);
+
+      return `[${cleanId}] (${cleanType}) Station: "${cleanStation}" | Row ${fl.sourceRowIndex} (${cleanCol}='${cleanRaw}'): ${cleanDesc}`;
+    })
     .join("\n");
 
   let diffText = "No previous briefing comparison available. Baseline briefing cycle.";
   if (req.diff && req.diff.hasPrevious) {
+    const cleanDiffStatus = sanitizePromptText(req.diff.status, 20).toUpperCase();
+    const cleanPrevCat = sanitizePromptText(req.diff.previousCategory, 20);
+    const cleanCurrCat = sanitizePromptText(req.diff.currentCategory, 20);
+    const cleanPrevStation = sanitizePromptText(req.diff.hotspotShift?.previousStation, 60);
+    const cleanCurrStation = sanitizePromptText(req.diff.hotspotShift?.currentStation, 60);
+    const cleanNarrative = sanitizePromptText(req.diff.ruleBasedNarrative, 300);
+
     diffText = `Previous Briefing Comparison:
-- Status: ${req.diff.status.toUpperCase()}
+- Status: ${cleanDiffStatus}
 - Average AQI Delta: ${req.diff.avgAqiDelta} points (${req.diff.previousAvgAqi} -> ${req.diff.currentAvgAqi})
-- Category: ${req.diff.previousCategory} -> ${req.diff.currentCategory}
-- Peak Hotspot: ${req.diff.hotspotShift.previousStation} (${req.diff.hotspotShift.previousAqi} AQI) -> ${req.diff.hotspotShift.currentStation} (${req.diff.hotspotShift.currentAqi} AQI)
-- Flags Delta: ${req.diff.flagDelta.difference} flags
-- Rule-based summary: ${req.diff.ruleBasedNarrative}`;
+- Category: ${cleanPrevCat} -> ${cleanCurrCat}
+- Peak Hotspot: ${cleanPrevStation} (${req.diff.hotspotShift?.previousAqi} AQI) -> ${cleanCurrStation} (${req.diff.hotspotShift?.currentAqi} AQI)
+- Flags Delta: ${req.diff.flagDelta?.difference ?? 0} flags
+- Rule-based summary: ${cleanNarrative}`;
   }
 
   const prompt = `TARGET AUDIENCE: ${audienceLabel}
@@ -195,7 +231,7 @@ Generate the structured civic air quality briefing JSON object following the req
 }
 
 /**
- * Orchestrates live brief generation with Gemini 2.5 Flash,
+ * Orchestrates live brief generation with Gemini,
  * schema enforcement, and strict Fact ID grounding validation.
  */
 export async function generateCivicBrief(
@@ -207,6 +243,10 @@ export async function generateCivicBrief(
     throw new Error(
       "GEMINI_API_KEY is not configured on the server. Please configure GEMINI_API_KEY in apps/web/.env or pass it securely in the server request header."
     );
+  }
+
+  if (!validateApiKeyFormat(apiKey)) {
+    throw new Error("Invalid API key format.");
   }
 
   const { systemInstruction, prompt } = buildBriefPrompt(req);

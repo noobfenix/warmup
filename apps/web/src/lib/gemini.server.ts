@@ -27,8 +27,8 @@ function getFallbackModels(): string[] {
 
 function getApiKey(): string {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not set in environment variables");
+  if (!apiKey || apiKey === "your_gemini_api_key_here") {
+    throw new Error("GEMINI_API_KEY is not set or contains default placeholder in environment variables");
   }
   return apiKey;
 }
