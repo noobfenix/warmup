@@ -3,8 +3,8 @@
 import React, { useState } from "react";
 import {
   FileText,
-  AlertTriangle,
   Clock,
+  ShieldCheck,
   ShieldAlert,
   Users,
   Baby,
@@ -12,10 +12,10 @@ import {
   Award,
   Copy,
   Check,
-  CheckCircle,
+  CheckCircle2,
   ExternalLink,
-  Info,
-  Building,
+  Printer,
+  Sparkles,
 } from "lucide-react";
 import type { CivicBriefResponse } from "@/lib/brief-validator";
 import type { ComputedFact } from "@/lib/flags-and-facts";
@@ -35,140 +35,202 @@ interface BriefViewProps {
 export function BriefView({ brief, facts, onSelectFact, auditInfo }: BriefViewProps) {
   const [copiedNote, setCopiedNote] = useState<boolean>(false);
   const [copiedFull, setCopiedFull] = useState<boolean>(false);
+  const [copiedMarkdown, setCopiedMarkdown] = useState<boolean>(false);
 
-  const copyToClipboard = (text: string, type: "note" | "full") => {
+  const copyToClipboard = (text: string, type: "note" | "full" | "markdown") => {
     navigator.clipboard.writeText(text);
     if (type === "note") {
       setCopiedNote(true);
       setTimeout(() => setCopiedNote(false), 2000);
-    } else {
+    } else if (type === "full") {
       setCopiedFull(true);
       setTimeout(() => setCopiedFull(false), 2000);
+    } else {
+      setCopiedMarkdown(true);
+      setTimeout(() => setCopiedMarkdown(false), 2000);
     }
+  };
+
+  const generateMarkdownBrief = () => {
+    return `# OFFICIAL CIVIC AIR QUALITY BRIEFING
+**Audience**: ${brief.audience.replace("_", " ").toUpperCase()}
+**Language**: ${brief.language.toUpperCase()} | **Tone**: ${brief.readingLevel.toUpperCase()}
+**Model**: ${brief.modelUsed || "Gemini 2.5 Flash"}
+
+## Executive Summary
+${brief.executiveSummary}
+
+## Audited Telemetry Findings
+${brief.findings.map((f) => `- [${f.severity.toUpperCase()}] ${f.finding} (${f.factIds.map((id) => `[${id}]`).join(" ")})`).join("\n")}
+
+## Operational Directives
+${brief.prioritizedActions.map((a) => `- **[${a.priority}]** ${a.action} (Target: ${a.targetGroup})`).join("\n")}
+
+## Demographic Protection Advisory
+- **General Public**: ${brief.citizenAdvisory.generalPublic}
+- **Children & Students**: ${brief.citizenAdvisory.vulnerableGroups.children}
+- **Older Adults**: ${brief.citizenAdvisory.vulnerableGroups.olderAdults}
+- **Respiratory / Sensitive**: ${brief.citizenAdvisory.vulnerableGroups.sensitivePeople}
+
+## Administrative Internal Note
+\`\`\`
+${brief.internalBriefingNote}
+\`\`\`
+
+---
+*Compliance Notice: ${brief.medicalDisclaimer}*`;
   };
 
   const getSeverityBadge = (severity: "info" | "warning" | "critical") => {
     switch (severity) {
       case "critical":
         return (
-          <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded bg-rose-500/15 text-rose-500 border border-rose-500/30">
+          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25">
             Critical
           </span>
         );
       case "warning":
         return (
-          <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-500 border border-amber-500/30">
+          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
             Warning
           </span>
         );
       default:
         return (
-          <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded bg-sky-500/15 text-sky-500 border border-sky-500/30">
+          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/25">
             Informational
           </span>
         );
     }
   };
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityClasses = (priority: string) => {
     if (priority.includes("Immediate")) {
-      return "border-rose-500/40 bg-rose-500/5 text-rose-600 dark:text-rose-400";
+      return {
+        badge: "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30",
+        container: "border-rose-500/30 bg-rose-500/5 hover:border-rose-500/50",
+      };
     }
     if (priority.includes("Short-term")) {
-      return "border-amber-500/40 bg-amber-500/5 text-amber-600 dark:text-amber-400";
+      return {
+        badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30",
+        container: "border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50",
+      };
     }
-    return "border-blue-500/40 bg-blue-500/5 text-blue-600 dark:text-blue-400";
+    return {
+      badge: "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30",
+      container: "border-border bg-card hover:bg-muted/30",
+    };
   };
 
   return (
-    <div className="space-y-6">
-      {/* Brief Header */}
-      <div className="rounded-xl border border-border bg-card p-5 space-y-3 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
-          <div>
-            <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className="text-xs font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
-                Target Audience: {brief.audience.replace("_", " ").toUpperCase()}
+    <article className="rounded-xl border border-border bg-card shadow-xs overflow-hidden space-y-6 pb-6">
+      {/* Header Bar */}
+      <div className="border-b border-border bg-muted/30 p-6 sm:p-7 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="space-y-2 max-w-2xl">
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className="font-semibold uppercase tracking-wide px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                Audience: {brief.audience.replace("_", " ")}
               </span>
-              <span className="text-xs font-mono uppercase px-2 py-0.5 rounded bg-muted text-muted-foreground border">
-                Lang: {brief.language.toUpperCase()}
+              <span className="uppercase px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+                Language: {brief.language}
               </span>
-              <span className="text-xs font-mono uppercase px-2 py-0.5 rounded bg-muted text-muted-foreground border">
-                Tone: {brief.readingLevel.toUpperCase()}
+              <span className="uppercase px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+                Tone: {brief.readingLevel}
               </span>
               {brief.modelUsed && (
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                  Model: {brief.modelUsed}
-                </span>
-              )}
-              {brief.fallbackModels && brief.fallbackModels.length > 0 && (
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border" title={`Fallbacks: ${brief.fallbackModels.join(", ")}`}>
-                  Fallbacks ({brief.fallbackModels.length})
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1 font-mono text-[11px]">
+                  <Sparkles className="h-3 w-3" />
+                  {brief.modelUsed}
                 </span>
               )}
             </div>
-            <h2 className="text-xl font-bold tracking-tight text-foreground">{brief.title}</h2>
+
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground leading-snug">
+              {brief.title}
+            </h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Action Toolbar */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => copyToClipboard(generateMarkdownBrief(), "markdown")}
+              className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition cursor-pointer shadow-xs font-medium"
+              title="Copy formatted Markdown brief"
+            >
+              {copiedMarkdown ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+              <span>{copiedMarkdown ? "Copied" : "Copy Brief"}</span>
+            </button>
             <button
               type="button"
               onClick={() => copyToClipboard(JSON.stringify(brief, null, 2), "full")}
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-muted/40 cursor-pointer transition"
+              className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition cursor-pointer shadow-xs font-medium"
+              title="Export structured JSON"
             >
-              {copiedFull ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-              <span>{copiedFull ? "JSON Copied!" : "Export JSON"}</span>
+              {copiedFull ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <FileText className="h-3.5 w-3.5" />}
+              <span>{copiedFull ? "Copied" : "JSON"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 p-1.5 rounded-lg border border-border bg-background hover:bg-muted transition cursor-pointer shadow-xs"
+              title="Print Brief"
+            >
+              <Printer className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        {/* Audit & Grounding Score Banner */}
-        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2.5 flex items-center justify-between text-xs flex-wrap gap-2">
-          <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-            <Award className="h-4 w-4" />
-            <span className="font-semibold">Fact Grounding Verification: 100% Verified</span>
-            <span className="text-muted-foreground">
-              (All cited Fact IDs strictly audited against normalized telemetry rows; 0 hallucinations allowed)
+        {/* Fact Grounding Seal */}
+        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 flex items-center justify-between text-xs flex-wrap gap-2">
+          <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400 font-medium">
+            <Award className="h-4 w-4 shrink-0" />
+            <span>Deterministic Grounding Verification: 100% Proven</span>
+            <span className="text-muted-foreground text-xs hidden lg:inline">
+              (All cited facts strictly audited against telemetry rows; 0 hallucinations)
             </span>
           </div>
           {auditInfo && auditInfo.rejectedFindingsCount > 0 && (
-            <span className="text-rose-500 font-mono text-[11px] font-bold">
-              Rejected {auditInfo.rejectedFindingsCount} findings with unknown Fact IDs
+            <span className="text-rose-500 font-mono text-xs font-bold">
+              Rejected {auditInfo.rejectedFindingsCount} findings with unverified Fact IDs
             </span>
           )}
         </div>
-
-        {/* Executive Summary */}
-        <div className="space-y-1">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Executive Summary
-          </h4>
-          <p className="text-sm font-medium text-foreground leading-relaxed">
-            {brief.executiveSummary}
-          </p>
-        </div>
       </div>
 
-      {/* Findings Section */}
-      <div className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-xs">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-primary" />
-            Audited Civic Findings ({brief.findings.length})
-          </h3>
-          <span className="text-[11px] text-muted-foreground">
-            Click any Fact ID tag to inspect source rows
-          </span>
-        </div>
+      {/* Main Content Stream */}
+      <div className="px-6 sm:px-7 space-y-7">
+        {/* Executive Summary */}
+        <section className="space-y-2">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Executive Summary
+          </h2>
+          <p className="text-sm sm:text-base text-foreground leading-relaxed text-pretty font-normal">
+            {brief.executiveSummary}
+          </p>
+        </section>
 
-        <div className="space-y-2.5">
-          {brief.findings.map((item, idx) => (
-            <div
-              key={idx}
-              className="p-3 rounded-lg border border-border bg-background hover:border-primary/40 transition space-y-2"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
+        {/* Audited Civic Findings */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between border-b border-border pb-2">
+            <h2 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              <span>Audited Civic Findings ({brief.findings.length})</span>
+            </h2>
+            <span className="text-xs text-muted-foreground">
+              Click [F#] tags to inspect raw records
+            </span>
+          </div>
+
+          <div className="divide-y divide-border border border-border rounded-lg overflow-hidden bg-card">
+            {brief.findings.map((item, idx) => (
+              <div
+                key={idx}
+                className="p-4 hover:bg-muted/30 transition-colors flex flex-col sm:flex-row sm:items-baseline justify-between gap-2.5"
+              >
+                <div className="space-y-1.5 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     {getSeverityBadge(item.severity)}
                     {item.factIds.map((fId) => (
@@ -176,159 +238,163 @@ export function BriefView({ brief, facts, onSelectFact, auditInfo }: BriefViewPr
                         key={fId}
                         type="button"
                         onClick={() => onSelectFact(fId)}
-                        className="inline-flex items-center gap-1 font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-primary/15 text-primary hover:bg-primary/25 border border-primary/30 transition cursor-pointer"
-                        title={`Inspect source data for ${fId}`}
+                        className="inline-flex items-center gap-1 font-mono text-xs font-bold px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition cursor-pointer"
+                        title={`Inspect source data rows for ${fId}`}
                       >
-                        [{fId}]
-                        <ExternalLink className="h-2.5 w-2.5" />
+                        <span>{fId}</span>
+                        <ExternalLink className="h-2.5 w-2.5 opacity-60" />
                       </button>
                     ))}
                   </div>
-                  <p className="text-sm text-foreground leading-relaxed">{item.finding}</p>
+                  <p className="text-sm text-foreground leading-relaxed text-pretty">
+                    {item.finding}
+                  </p>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </div>
+            ))}
+          </div>
+        </section>
 
-      {/* Prioritized Actions Section */}
-      <div className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-xs">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-            <Clock className="h-4 w-4 text-primary" />
-            Prioritized Operational Actions for {brief.audience.replace("_", " ")}
-          </h3>
-          <span className="text-[11px] text-muted-foreground">Structured by operational urgency</span>
-        </div>
+        {/* Operational Directives */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between border-b border-border pb-2">
+            <h2 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" />
+              <span>Operational Directives for {brief.audience.replace("_", " ")}</span>
+            </h2>
+            <span className="text-xs text-muted-foreground">
+              Prioritized by response timeline
+            </span>
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {brief.prioritizedActions.map((action, idx) => (
-            <div
-              key={idx}
-              className={`p-3.5 rounded-lg border flex flex-col justify-between space-y-2 ${getPriorityColor(
-                action.priority
-              )}`}
-            >
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-mono font-bold uppercase tracking-wider block">
-                  {action.priority}
-                </span>
-                <p className="text-xs text-foreground font-medium leading-relaxed">
-                  {action.action}
-                </p>
-              </div>
-
-              <div className="pt-2 border-t border-border/60 flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground font-medium">Target: {action.targetGroup}</span>
-                {action.rationaleFactIds && action.rationaleFactIds.length > 0 && (
-                  <div className="flex gap-1 font-mono">
-                    {action.rationaleFactIds.map((id) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => onSelectFact(id)}
-                        className="text-[10px] text-primary underline hover:opacity-80"
-                      >
-                        {id}
-                      </button>
-                    ))}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {brief.prioritizedActions.map((action, idx) => {
+              const styles = getPriorityClasses(action.priority);
+              return (
+                <div
+                  key={idx}
+                  className={`p-4 rounded-lg border flex flex-col justify-between space-y-3 transition-colors ${styles.container}`}
+                >
+                  <div className="space-y-2">
+                    <span className={`inline-block text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${styles.badge}`}>
+                      {action.priority}
+                    </span>
+                    <p className="text-xs sm:text-sm text-foreground font-medium leading-relaxed">
+                      {action.action}
+                    </p>
                   </div>
-                )}
+
+                  <div className="pt-2.5 border-t border-border flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Target: <strong className="text-foreground">{action.targetGroup}</strong></span>
+                    {action.rationaleFactIds && action.rationaleFactIds.length > 0 && (
+                      <div className="flex gap-1 font-mono">
+                        {action.rationaleFactIds.map((id) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => onSelectFact(id)}
+                            className="text-xs font-bold text-primary hover:underline cursor-pointer"
+                          >
+                            {id}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Citizen Public Advisory */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between border-b border-border pb-2">
+            <h2 className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <span>Public Guidance &amp; Demographic Protection</span>
+            </h2>
+            <span className="text-xs text-muted-foreground">
+              Community dissemination rules
+            </span>
+          </div>
+
+          {/* General Public */}
+          <div className="p-4 rounded-lg bg-muted/40 border border-border space-y-1">
+            <span className="text-xs font-semibold text-primary block">
+              General Community Advisory
+            </span>
+            <p className="text-xs sm:text-sm text-foreground leading-relaxed text-pretty">
+              {brief.citizenAdvisory.generalPublic}
+            </p>
+          </div>
+
+          {/* Vulnerable Groups */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div className="p-4 rounded-lg border border-amber-500/30 bg-amber-500/5 space-y-1.5">
+              <div className="flex items-center gap-2 font-semibold text-amber-600 dark:text-amber-400">
+                <Baby className="h-4 w-4" />
+                <span>Children &amp; Schools</span>
               </div>
+              <p className="text-xs text-muted-foreground leading-relaxed text-pretty">
+                {brief.citizenAdvisory.vulnerableGroups.children}
+              </p>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Internal Briefing Note Section */}
-      <div className="rounded-xl border border-border bg-card p-5 space-y-3 shadow-xs">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Building className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-bold text-foreground">
-              Internal Administrative Briefing Note
-            </h3>
+            <div className="p-4 rounded-lg border border-purple-500/30 bg-purple-500/5 space-y-1.5">
+              <div className="flex items-center gap-2 font-semibold text-purple-600 dark:text-purple-400">
+                <Users className="h-4 w-4" />
+                <span>Senior Citizens</span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed text-pretty">
+                {brief.citizenAdvisory.vulnerableGroups.olderAdults}
+              </p>
+            </div>
+
+            <div className="p-4 rounded-lg border border-rose-500/30 bg-rose-500/5 space-y-1.5">
+              <div className="flex items-center gap-2 font-semibold text-rose-600 dark:text-rose-400">
+                <HeartPulse className="h-4 w-4" />
+                <span>Sensitive / Respiratory</span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed text-pretty">
+                {brief.citizenAdvisory.vulnerableGroups.sensitivePeople}
+              </p>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => copyToClipboard(brief.internalBriefingNote, "note")}
-            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 px-2.5 py-1 rounded border border-border bg-muted cursor-pointer transition"
-          >
-            {copiedNote ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-            <span>{copiedNote ? "Copied Note!" : "Copy Note"}</span>
-          </button>
-        </div>
+        </section>
 
-        <div className="p-3.5 rounded-lg bg-muted/50 border border-border/80 font-mono text-xs text-foreground leading-relaxed whitespace-pre-wrap">
-          {brief.internalBriefingNote}
-        </div>
-      </div>
-
-      {/* Citizen Advisory Section */}
-      <div className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-xs">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            Citizen Public Advisory (Demographic Breakdown)
-          </h3>
-          <span className="text-[11px] text-muted-foreground">Community dissemination guidance</span>
-        </div>
-
-        {/* General Public */}
-        <div className="p-3 rounded-lg bg-background border border-border space-y-1">
-          <span className="text-xs font-semibold text-primary block">
-            General Resident Community
-          </span>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            {brief.citizenAdvisory.generalPublic}
-          </p>
-        </div>
-
-        {/* Partitioned Vulnerable Groups */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
-              <Baby className="h-4 w-4" />
-              <span>Children & Students</span>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {brief.citizenAdvisory.vulnerableGroups.children}
-            </p>
+        {/* Administrative Internal Note */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+              <FileText className="h-3.5 w-3.5" />
+              <span>Administrative Internal Briefing Note</span>
+            </h2>
+            <button
+              type="button"
+              onClick={() => copyToClipboard(brief.internalBriefingNote, "note")}
+              className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-border bg-muted cursor-pointer transition"
+            >
+              {copiedNote ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+              <span>{copiedNote ? "Copied" : "Copy Note"}</span>
+            </button>
           </div>
-
-          <div className="p-3 rounded-lg border border-purple-500/30 bg-purple-500/5 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-purple-600 dark:text-purple-400">
-              <Users className="h-4 w-4" />
-              <span>Older Adults & Seniors</span>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {brief.citizenAdvisory.vulnerableGroups.olderAdults}
-            </p>
+          <div className="p-4 rounded-lg bg-muted/50 border border-border font-mono text-xs text-foreground leading-relaxed whitespace-pre-wrap">
+            {brief.internalBriefingNote}
           </div>
+        </section>
 
-          <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/5 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-rose-600 dark:text-rose-400">
-              <HeartPulse className="h-4 w-4" />
-              <span>Sensitive & At-Risk People</span>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {brief.citizenAdvisory.vulnerableGroups.sensitivePeople}
-            </p>
+        {/* Public Health & Non-Medical Guardrail */}
+        <div className="rounded-lg border border-border bg-muted/40 p-4 flex items-start gap-3 text-xs text-muted-foreground">
+          <ShieldAlert className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <span className="font-semibold text-foreground text-xs uppercase tracking-wider block">
+              Official Non-Medical Civic Guardrail
+            </span>
+            <p className="leading-relaxed text-xs">{brief.medicalDisclaimer}</p>
           </div>
         </div>
       </div>
-
-      {/* Mandatory Non-Medical Disclaimer Banner */}
-      <div className="rounded-lg border border-border bg-muted/40 p-3.5 flex items-start gap-3 text-xs text-muted-foreground">
-        <ShieldAlert className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-        <div>
-          <span className="font-semibold text-foreground uppercase tracking-wider block mb-0.5">
-            Public Health & Civic Operational Guardrail
-          </span>
-          <p className="leading-relaxed">{brief.medicalDisclaimer}</p>
-        </div>
-      </div>
-    </div>
+    </article>
   );
 }

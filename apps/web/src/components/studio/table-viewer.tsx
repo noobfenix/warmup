@@ -2,8 +2,7 @@
 
 import React, { useState } from "react";
 import type { NormalizedRow } from "@/lib/table-parser";
-import { Table, Eye, Layers } from "lucide-react";
-import { getAqiCategory } from "@/lib/cpcb";
+import { Table, Layers, Search } from "lucide-react";
 
 interface TableViewerProps {
   rows: NormalizedRow[];
@@ -13,6 +12,7 @@ interface TableViewerProps {
 
 export function TableViewer({ rows, highlightedRowIndices = [], onSelectRow }: TableViewerProps) {
   const [showRaw, setShowRaw] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
   if (rows.length === 0) return null;
 
@@ -23,117 +23,140 @@ export function TableViewer({ rows, highlightedRowIndices = [], onSelectRow }: T
       case "Satisfactory":
         return "bg-lime-500/15 text-lime-600 dark:text-lime-400 border-lime-500/30";
       case "Moderate":
-        return "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border-yellow-500/30";
+        return "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30";
       case "Poor":
         return "bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30";
       case "Very Poor":
-        return "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30";
+        return "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30";
       case "Severe":
-        return "bg-rose-900/30 text-rose-500 dark:text-rose-400 border-rose-500/40 font-bold";
+        return "bg-rose-950/40 text-rose-500 dark:text-rose-400 border-rose-500/40 font-bold";
       default:
         return "bg-muted text-muted-foreground border-border";
     }
   };
 
+  const filteredRows = searchQuery.trim()
+    ? rows.filter((r) =>
+        r.station.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        r.cpcbCategory?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (r.timestamp && r.timestamp.includes(searchQuery))
+      )
+    : rows;
+
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden shadow-xs space-y-0">
-      <div className="bg-muted/40 border-b border-border px-4 py-2.5 flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
+    <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs space-y-0">
+      {/* Table Action Bar */}
+      <div className="bg-muted/40 border-b border-border px-5 py-3 flex items-center justify-between flex-wrap gap-2.5">
+        <div className="flex items-center gap-2.5">
           <Table className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-xs text-foreground">
-            Normalized Air Quality Telemetry Table ({rows.length} Rows)
+          <span className="font-semibold text-xs text-foreground uppercase tracking-wide">
+            Audited Telemetry Registry ({rows.length} Total Rows)
           </span>
           {highlightedRowIndices.length > 0 && (
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30">
-              Highlighting {highlightedRowIndices.length} row(s) [
-              {highlightedRowIndices.join(", ")}]
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 font-semibold">
+              Highlighting #{highlightedRowIndices.join(", #")}
             </span>
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowRaw(!showRaw)}
-          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 px-2 py-1 rounded bg-muted border border-border cursor-pointer transition"
-        >
-          <Layers className="h-3.5 w-3.5" />
-          <span>{showRaw ? "Show Normalized Data" : "Show Raw Input Data"}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Quick Filter */}
+          <div className="relative">
+            <Search className="h-3 w-3 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter stations..."
+              className="text-xs pl-7 pr-2.5 py-1 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary w-32 sm:w-40"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowRaw(!showRaw)}
+            className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-background border border-border cursor-pointer transition shadow-xs"
+          >
+            <Layers className="h-3 w-3" />
+            <span>{showRaw ? "Normalized Data" : "Raw Data"}</span>
+          </button>
+        </div>
       </div>
 
-      <div className="overflow-x-auto max-h-72">
-        <table className="w-full text-xs text-left">
-          <thead className="bg-muted/80 text-muted-foreground font-mono text-[11px] uppercase border-b border-border sticky top-0 z-10 backdrop-blur">
+      {/* Table */}
+      <div className="overflow-x-auto max-h-80">
+        <table className="w-full text-xs text-left border-collapse">
+          <thead className="bg-muted/80 text-muted-foreground font-mono text-[11px] uppercase tracking-wider border-b border-border sticky top-0 z-10 backdrop-blur-md">
             <tr>
-              <th className="p-2.5">#</th>
-              <th className="p-2.5">Station / Location</th>
-              <th className="p-2.5">Timestamp</th>
-              <th className="p-2.5">PM2.5 (&mu;g/m&sup3;)</th>
-              <th className="p-2.5">PM10 (&mu;g/m&sup3;)</th>
-              <th className="p-2.5">NO2 (&mu;g/m&sup3;)</th>
-              <th className="p-2.5">AQI</th>
-              <th className="p-2.5">CPCB Category</th>
+              <th className="p-3 pl-4">#</th>
+              <th className="p-3">Station / Location</th>
+              <th className="p-3">Timestamp</th>
+              <th className="p-3 font-mono text-right">PM2.5</th>
+              <th className="p-3 font-mono text-right">PM10</th>
+              <th className="p-3 font-mono text-right">NO2</th>
+              <th className="p-3 font-mono text-right">AQI</th>
+              <th className="p-3 pr-4">CPCB Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border/60">
-            {rows.map((row) => {
+          <tbody className="divide-y divide-border">
+            {filteredRows.map((row) => {
               const isHighlighted = highlightedRowIndices.includes(row.sourceRowIndex);
               return (
                 <tr
                   key={row.sourceRowIndex}
                   onClick={() => onSelectRow && onSelectRow(row.sourceRowIndex)}
-                  className={`transition cursor-pointer ${
+                  className={`transition-colors cursor-pointer ${
                     isHighlighted
-                      ? "bg-primary/20 ring-1 ring-primary/40 font-medium"
-                      : "bg-card hover:bg-muted/40"
+                      ? "bg-primary/15 font-medium ring-1 ring-inset ring-primary/40"
+                      : "bg-card hover:bg-muted/30"
                   }`}
                 >
-                  <td className="p-2.5 font-mono font-bold text-muted-foreground">
+                  <td className="p-3 pl-4 font-mono text-xs text-muted-foreground font-bold">
                     #{row.sourceRowIndex}
                   </td>
-                  <td className="p-2.5 font-medium text-foreground">{row.station}</td>
-                  <td className="p-2.5 text-muted-foreground font-mono text-[11px]">
+                  <td className="p-3 font-semibold text-foreground">{row.station}</td>
+                  <td className="p-3 text-muted-foreground font-mono text-xs">
                     {row.timestamp || "—"}
                   </td>
-                  <td className="p-2.5 font-mono">
+                  <td className="p-3 font-mono text-right tabular-nums text-foreground/90">
                     {showRaw
                       ? row.rawValues["PM2.5"] || "—"
                       : row.values["PM2.5"] !== null && row.values["PM2.5"] !== undefined
                       ? row.values["PM2.5"]
                       : "—"}
                   </td>
-                  <td className="p-2.5 font-mono">
+                  <td className="p-3 font-mono text-right tabular-nums text-foreground/90">
                     {showRaw
                       ? row.rawValues["PM10"] || "—"
                       : row.values["PM10"] !== null && row.values["PM10"] !== undefined
                       ? row.values["PM10"]
                       : "—"}
                   </td>
-                  <td className="p-2.5 font-mono">
+                  <td className="p-3 font-mono text-right tabular-nums text-foreground/90">
                     {showRaw
                       ? row.rawValues["NO2"] || "—"
                       : row.values["NO2"] !== null && row.values["NO2"] !== undefined
                       ? row.values["NO2"]
                       : "—"}
                   </td>
-                  <td className="p-2.5 font-mono font-bold">
+                  <td className="p-3 font-mono text-right font-bold tabular-nums">
                     {row.calculatedAqi !== null ? (
                       <span className="text-foreground">{row.calculatedAqi}</span>
                     ) : (
-                      <span className="text-muted-foreground italic">None</span>
+                      <span className="text-muted-foreground italic font-normal">—</span>
                     )}
                   </td>
-                  <td className="p-2.5">
+                  <td className="p-3 pr-4">
                     {row.cpcbCategory ? (
                       <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full border ${getCategoryBadgeClass(
+                        className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full border ${getCategoryBadgeClass(
                           row.cpcbCategory
                         )}`}
                       >
                         {row.cpcbCategory}
                       </span>
                     ) : (
-                      <span className="text-[10px] text-muted-foreground">N/A</span>
+                      <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </td>
                 </tr>

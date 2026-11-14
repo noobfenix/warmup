@@ -38,6 +38,11 @@ const nextConfig: NextConfig = {
   output: process.env.VERCEL ? undefined : "standalone",
   typedRoutes: true,
   reactCompiler: true,
+  compress: true,
+  poweredByHeader: false,
+  experimental: {
+    optimizePackageImports: ["lucide-react", "@warmup/ui", "sonner"],
+  },
   async headers() {
     return [
       {

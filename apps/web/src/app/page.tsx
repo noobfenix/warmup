@@ -1,38 +1,74 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import dynamic from "next/dynamic";
 import {
-  Wind,
   Sparkles,
   Upload,
   FileSpreadsheet,
   AlertCircle,
   RefreshCw,
   Sliders,
-  Send,
-  Trash2,
-  HelpCircle,
-  FileText,
-  BarChart3,
-  Layers,
   ShieldCheck,
   Key,
   ChevronDown,
   ChevronUp,
   RotateCcw,
+  FileText,
+  Table,
+  AlertOctagon,
+  CheckCircle2,
+  Wind,
 } from "lucide-react";
-import { parseRawTableInput, normalizeTableData, heuristicMapColumns, type NormalizedRow } from "@/lib/table-parser";
-import { analyzeAirQualityData, type AnalysisOutput, type ComputedFact } from "@/lib/flags-and-facts";
+import { parseRawTableInput, normalizeTableData, heuristicMapColumns } from "@/lib/table-parser";
+import { analyzeAirQualityData, type AnalysisOutput } from "@/lib/flags-and-facts";
 import { computeAirQualityDiff, type AirQualityDiff } from "@/lib/diff-engine";
 import type { CivicBriefResponse } from "@/lib/brief-validator";
-import { SAMPLE_DATASETS, type SampleDataset } from "@/config/sample-datasets";
+import type { SampleDataset } from "@/config/sample-datasets";
 import { SampleButtons } from "@/components/studio/sample-buttons";
 import { FlagsPanel } from "@/components/studio/flags-panel";
-import { DiffPanel } from "@/components/studio/diff-panel";
-import { TableViewer } from "@/components/studio/table-viewer";
-import { BriefView } from "@/components/studio/brief-view";
-import { FactModal } from "@/components/studio/fact-modal";
 import { toast } from "sonner";
+
+const TableViewer = dynamic(
+  () => import("@/components/studio/table-viewer").then((mod) => mod.TableViewer),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center p-12 text-muted-foreground text-sm">
+        Loading tabular data...
+      </div>
+    ),
+    ssr: false,
+  }
+);
+
+const BriefView = dynamic(
+  () => import("@/components/studio/brief-view").then((mod) => mod.BriefView),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center p-12 text-muted-foreground text-sm">
+        Loading briefing dossier...
+      </div>
+    ),
+    ssr: false,
+  }
+);
+
+const DiffPanel = dynamic(
+  () => import("@/components/studio/diff-panel").then((mod) => mod.DiffPanel),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center p-6 text-muted-foreground text-sm">
+        Loading telemetry comparison...
+      </div>
+    ),
+    ssr: false,
+  }
+);
+
+const FactModal = dynamic(
+  () => import("@/components/studio/fact-modal").then((mod) => mod.FactModal),
+  { ssr: false }
+);
 
 interface StoredBriefRecord {
   brief: CivicBriefResponse;
@@ -47,7 +83,7 @@ export default function CivicStudioPage() {
   const [rawText, setRawText] = useState<string>("");
   const [selectedSampleId, setSelectedSampleId] = useState<string>("");
 
-  // Optional custom API key (stays strictly in server-side POST request header)
+  // Optional custom API key (server-side POST request header)
   const [customKey, setCustomKey] = useState<string>("");
   const [showKeyInput, setShowKeyInput] = useState<boolean>(false);
 
@@ -69,7 +105,7 @@ export default function CivicStudioPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"brief" | "table" | "flags">("brief");
 
-  // Process data locally in deterministic pure TypeScript
+  // Deterministic local processing in pure TypeScript
   const processInputData = (text: string) => {
     try {
       setError(null);
@@ -108,7 +144,7 @@ export default function CivicStudioPage() {
     setRawText(sample.data);
     setAudience(sample.defaultAudience);
     processInputData(sample.data);
-    toast.success(`Loaded sample dataset: ${sample.name}`);
+    toast.success(`Loaded dataset: ${sample.name.replace(/^\[Sample\]\s*/i, "")}`);
   };
 
   const handleClearData = () => {
@@ -198,7 +234,7 @@ export default function CivicStudioPage() {
       setAuditInfo(responseData.audit);
       setActiveTab("brief");
 
-      // Save to localStorage for next diff
+      // Save to localStorage for chronological comparison
       try {
         const newRecord: StoredBriefRecord = {
           brief: generatedBrief,
@@ -210,7 +246,7 @@ export default function CivicStudioPage() {
         console.warn("Failed to save brief to localStorage:", saveErr);
       }
 
-      toast.success("Civic briefing successfully generated and audited!");
+      toast.success("Civic briefing successfully synthesized and audited!");
     } catch (err: any) {
       console.error("Brief generation error:", err);
       const msg = err.message || "An error occurred while generating the briefing.";
@@ -236,42 +272,46 @@ export default function CivicStudioPage() {
   const selectedFact = analysis?.facts.find((f) => f.id === inspectFactId) || null;
 
   return (
-    <main className="min-h-screen bg-background text-foreground p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <main className="min-h-screen bg-background text-foreground px-4 sm:px-6 lg:px-8 py-8 max-w-7xl mx-auto space-y-8">
       {/* Studio Header Card */}
-      <section className="rounded-xl border border-border bg-card/90 p-5 sm:p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
-              Civic Air Quality Briefing Studio
-            </h1>
-            <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+      <section className="rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="space-y-2 max-w-3xl">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
               CPCB NAQI Standards
             </span>
-            <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border">
-              Gemini Server-Grounded
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+              Deterministic Facts [F1..Fn]
+            </span>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+              Zero Hallucination Audit
             </span>
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground max-w-3xl leading-relaxed">
-            Ingest air quality tables &rarr; compute deterministic facts with traceable source row IDs (<code className="text-emerald-400 font-mono">F1..Fn</code>) &amp; sensor anomaly flags &rarr; generate audience-targeted briefings with automated Fact ID auditing and zero medical advice.
+
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            Civic Air Quality Briefing Studio
+          </h1>
+          <p className="text-sm text-muted-foreground leading-relaxed text-pretty">
+            Ingest ambient air telemetry &rarr; extract verifiable mathematical facts &amp; sensor anomalies &rarr; synthesize targeted civic action briefings with server-enforced grounding audits.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
           <button
             type="button"
             onClick={handleGenerateBrief}
             disabled={isLoading || !analysis || analysis.normalizedRows.length === 0}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs sm:text-sm hover:bg-primary/90 disabled:opacity-50 transition cursor-pointer shadow-sm active:scale-98"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 disabled:opacity-50 transition cursor-pointer shadow-sm active:scale-98"
             aria-label="Generate Civic Briefing"
           >
             {isLoading ? (
               <>
                 <RefreshCw className="h-4 w-4 animate-spin" />
-                <span>Auditing &amp; Synthesizing...</span>
+                <span>Synthesizing &amp; Auditing...</span>
               </>
             ) : (
               <>
-                <Sparkles className="h-4 w-4 text-amber-300" />
+                <Sparkles className="h-4 w-4" />
                 <span>Generate Civic Briefing</span>
               </>
             )}
@@ -279,38 +319,39 @@ export default function CivicStudioPage() {
         </div>
       </section>
 
-      {/* Error Notice */}
+      {/* Error Alert */}
       {error && (
         <div
           role="alert"
-          className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-xs text-destructive flex items-start gap-3 animate-in fade-in"
+          className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-xs text-destructive flex items-start gap-3 animate-in fade-in"
         >
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <span className="font-bold">System Notice</span>
+          <div className="space-y-0.5">
+            <span className="font-semibold text-xs uppercase tracking-wider">System Notice</span>
             <p className="leading-relaxed">{error}</p>
           </div>
         </div>
       )}
 
       {/* Main Studio Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column (5 Cols): Data Workbench & Configuration */}
-        <div className="lg:col-span-5 space-y-5">
-          {/* Sample Buttons (Labeled as Sample) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Column (5 Cols): Data Workbench & Parameters */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Preset Profiles */}
           <SampleButtons
             onSelectSample={handleSelectSample}
             selectedSampleId={selectedSampleId}
           />
 
-          {/* Tabular Input Workbench */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3 shadow-xs">
+          {/* Ingestion Console */}
+          <div className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-xs">
             <div className="flex items-center justify-between">
               <label
                 htmlFor="table-data-input"
-                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"
+                className="text-xs font-semibold text-foreground flex items-center gap-1.5 uppercase tracking-wide"
               >
-                <FileSpreadsheet className="h-3.5 w-3.5 text-primary" /> Table Ingestion (Paste or Upload)
+                <FileSpreadsheet className="h-4 w-4 text-primary" />
+                <span>Raw Telemetry Ingestion</span>
               </label>
 
               <div className="flex items-center gap-2">
@@ -318,14 +359,14 @@ export default function CivicStudioPage() {
                   <button
                     type="button"
                     onClick={handleClearData}
-                    className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 cursor-pointer transition"
+                    className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 cursor-pointer transition px-2 py-0.5 rounded hover:bg-muted"
                     title="Clear raw data"
                   >
                     <RotateCcw className="h-3 w-3" />
                     <span>Clear</span>
                   </button>
                 )}
-                <label className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer bg-muted px-2.5 py-1 rounded border border-border transition">
+                <label className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 cursor-pointer bg-muted hover:bg-muted/80 px-2.5 py-1 rounded-md border border-border transition shadow-xs">
                   <Upload className="h-3 w-3" />
                   <span>Upload File</span>
                   <input
@@ -342,16 +383,16 @@ export default function CivicStudioPage() {
               id="table-data-input"
               value={rawText}
               onChange={handleTextChange}
-              placeholder="Paste raw table data here (e.g. Station, Timestamp, PM2.5, PM10, AQI)... or click a [Sample] button above."
+              placeholder="Paste raw telemetry records (CSV, TSV, JSON) or click a dataset profile above..."
               rows={8}
-              className="w-full font-mono text-xs p-3 rounded-lg border border-border bg-background/80 focus:ring-1 focus:ring-primary focus:outline-none resize-y leading-relaxed text-foreground"
+              className="w-full font-mono text-xs p-3.5 rounded-lg border border-input bg-background focus:ring-1 focus:ring-primary focus:border-primary focus:outline-none resize-y leading-relaxed text-foreground placeholder:text-muted-foreground/60 transition"
               aria-label="Air Quality Table Input"
             />
 
             {analysis ? (
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono bg-muted/40 p-2.5 rounded-lg border border-border/60">
-                <span>Total Observations: {analysis.summary.totalRows}</span>
-                <span>Flags: {analysis.summary.flaggedRowsCount}</span>
+              <div className="flex items-center justify-between text-xs text-muted-foreground font-mono bg-muted/50 p-3 rounded-lg border border-border flex-wrap gap-2">
+                <span>Rows: <strong className="text-foreground">{analysis.summary.totalRows}</strong></span>
+                <span>Flags: <strong className={analysis.summary.flaggedRowsCount > 0 ? "text-amber-500" : "text-emerald-500"}>{analysis.summary.flaggedRowsCount}</strong></span>
                 <span>
                   Avg AQI:{" "}
                   <strong className="text-foreground">
@@ -361,26 +402,26 @@ export default function CivicStudioPage() {
                 </span>
               </div>
             ) : (
-              <p className="text-[11px] text-muted-foreground italic">
-                No data loaded. Paste table data or click a [Sample] button above to begin.
+              <p className="text-xs text-muted-foreground italic px-1">
+                No telemetry data loaded. Load a profile above or paste data to calculate facts.
               </p>
             )}
           </div>
 
-          {/* Audience, Language & Reading Level Configuration */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-4 shadow-xs">
-            <div className="flex items-center gap-2 border-b border-border pb-2.5">
+          {/* Dissemination Parameters Matrix */}
+          <div className="rounded-xl border border-border bg-card p-5 space-y-4 shadow-xs">
+            <div className="flex items-center gap-2 border-b border-border pb-3">
               <Sliders className="h-4 w-4 text-primary" />
-              <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                Audience &amp; Dissemination Parameters
-              </h3>
+              <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                Briefing Parameters
+              </h2>
             </div>
 
-            <div className="space-y-3.5 text-xs">
+            <div className="space-y-4 text-xs">
               {/* Audience */}
               <div>
-                <label className="font-semibold text-foreground block mb-1.5">
-                  Target Audience
+                <label className="text-xs font-medium text-foreground block mb-2">
+                  Target Authority / Audience
                 </label>
                 <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Target Audience">
                   {[
@@ -394,9 +435,9 @@ export default function CivicStudioPage() {
                       role="radio"
                       aria-checked={audience === aud.id}
                       onClick={() => setAudience(aud.id as any)}
-                      className={`p-2 rounded-lg text-xs font-medium border text-center transition cursor-pointer ${
+                      className={`py-2 px-2 rounded-lg text-xs font-medium text-center transition cursor-pointer border ${
                         audience === aud.id
-                          ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                          ? "bg-primary text-primary-foreground border-primary shadow-xs font-semibold"
                           : "bg-background text-muted-foreground hover:bg-muted border-border"
                       }`}
                     >
@@ -406,10 +447,10 @@ export default function CivicStudioPage() {
                 </div>
               </div>
 
-              {/* Language */}
+              {/* Language Selection */}
               <div>
-                <label className="font-semibold text-foreground block mb-1.5">
-                  Language Selection (English, Hindi + Marathi/Tamil)
+                <label className="text-xs font-medium text-foreground block mb-2">
+                  Dissemination Language
                 </label>
                 <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Language">
                   {[
@@ -424,9 +465,9 @@ export default function CivicStudioPage() {
                       role="radio"
                       aria-checked={language === lang.id}
                       onClick={() => setLanguage(lang.id as any)}
-                      className={`p-1.5 rounded-lg text-xs font-medium border text-center transition cursor-pointer ${
+                      className={`py-2 px-1 rounded-lg text-xs font-medium text-center transition cursor-pointer border ${
                         language === lang.id
-                          ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                          ? "bg-primary text-primary-foreground border-primary shadow-xs font-semibold"
                           : "bg-background text-muted-foreground hover:bg-muted border-border"
                       }`}
                     >
@@ -438,14 +479,14 @@ export default function CivicStudioPage() {
 
               {/* Reading Level */}
               <div>
-                <label className="font-semibold text-foreground block mb-1.5">
-                  Reading Level
+                <label className="text-xs font-medium text-foreground block mb-2">
+                  Tone / Cognitive Complexity
                 </label>
                 <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Reading Level">
                   {[
                     { id: "executive", label: "Executive" },
-                    { id: "standard", label: "Standard" },
-                    { id: "accessible", label: "Accessible" },
+                    { id: "standard", label: "Standard Civic" },
+                    { id: "accessible", label: "Plain Public" },
                   ].map((level) => (
                     <button
                       key={level.id}
@@ -453,9 +494,9 @@ export default function CivicStudioPage() {
                       role="radio"
                       aria-checked={readingLevel === level.id}
                       onClick={() => setReadingLevel(level.id as any)}
-                      className={`p-2 rounded-lg text-xs font-medium border text-center transition cursor-pointer ${
+                      className={`py-2 px-2 rounded-lg text-xs font-medium text-center transition cursor-pointer border ${
                         readingLevel === level.id
-                          ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                          ? "bg-primary text-primary-foreground border-primary shadow-xs font-semibold"
                           : "bg-background text-muted-foreground hover:bg-muted border-border"
                       }`}
                     >
@@ -465,31 +506,31 @@ export default function CivicStudioPage() {
                 </div>
               </div>
 
-              {/* Optional Server Key Override */}
-              <div className="pt-2 border-t border-border/60">
+              {/* Server Key Override */}
+              <div className="pt-2 border-t border-border">
                 <button
                   type="button"
                   onClick={() => setShowKeyInput(!showKeyInput)}
-                  className="text-[11px] text-muted-foreground hover:text-foreground flex items-center justify-between w-full cursor-pointer py-1"
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center justify-between w-full cursor-pointer py-1"
                 >
                   <span className="flex items-center gap-1.5">
-                    <Key className="h-3 w-3 text-amber-400" />
-                    <span>Optional: Server-Side Gemini API Key Override</span>
+                    <Key className="h-3.5 w-3.5 text-amber-500" />
+                    <span>Optional Server-Side Gemini API Key Override</span>
                   </span>
-                  {showKeyInput ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  {showKeyInput ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                 </button>
 
                 {showKeyInput && (
-                  <div className="mt-2 space-y-1.5 bg-muted/40 p-2.5 rounded-lg border border-border">
-                    <p className="text-[10px] text-muted-foreground">
-                      If not set in server environment variables, pass a key here (transmitted only to server API endpoint via headers):
+                  <div className="mt-2 space-y-2 bg-muted/40 p-3 rounded-lg border border-border">
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Supplied strictly through HTTP header to the server API endpoint:
                     </p>
                     <input
                       type="password"
                       value={customKey}
                       onChange={(e) => setCustomKey(e.target.value)}
                       placeholder="AIzaSy..."
-                      className="w-full text-xs font-mono p-2 rounded bg-background border border-border focus:ring-1 focus:ring-primary focus:outline-none"
+                      className="w-full text-xs font-mono p-2 rounded-md bg-background border border-border focus:ring-1 focus:ring-primary focus:outline-none"
                     />
                   </div>
                 )}
@@ -497,29 +538,29 @@ export default function CivicStudioPage() {
             </div>
           </div>
 
-          {/* Computed Verifiable Facts Strip */}
+          {/* Computed Verifiable Facts Shelf */}
           {analysis && analysis.facts.length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-4 space-y-2.5 shadow-xs">
+            <div className="rounded-xl border border-border bg-card p-5 space-y-3 shadow-xs">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                  <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide flex items-center gap-1.5">
+                  <ShieldCheck className="h-4 w-4 text-emerald-500" />
                   <span>Computed Verifiable Facts ({analysis.facts.length})</span>
-                </h4>
-                <span className="text-[11px] text-muted-foreground font-mono">
+                </h3>
+                <span className="text-xs text-muted-foreground font-mono">
                   IDs: F1..F{analysis.facts.length}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
+              <div className="flex flex-wrap gap-1.5 max-h-52 overflow-y-auto pr-1">
                 {analysis.facts.map((fact) => (
                   <button
                     key={fact.id}
                     type="button"
                     onClick={() => setInspectFactId(fact.id)}
-                    className="inline-flex items-center gap-1 font-mono text-[11px] font-bold px-2 py-1 rounded bg-muted/80 hover:bg-primary/15 hover:text-primary border border-border transition cursor-pointer"
+                    className="inline-flex items-center gap-1.5 font-mono text-xs font-medium px-2.5 py-1 rounded-md bg-muted/80 hover:bg-primary/10 hover:text-primary border border-border transition cursor-pointer text-foreground"
                     title={fact.statement}
                   >
-                    <span>{fact.id}:</span>
-                    <span className="font-sans font-normal truncate max-w-[130px]">
+                    <span className="font-bold text-primary">{fact.id}:</span>
+                    <span className="font-sans font-normal truncate max-w-[140px]">
                       {fact.title}
                     </span>
                   </button>
@@ -530,7 +571,7 @@ export default function CivicStudioPage() {
         </div>
 
         {/* Right Column (7 Cols): Output Center */}
-        <div className="lg:col-span-7 space-y-5">
+        <div className="lg:col-span-7 space-y-6">
           {/* Tab Navigation */}
           <div className="flex items-center justify-between border-b border-border pb-1">
             <div className="flex gap-2 text-xs" role="tablist">
@@ -539,41 +580,44 @@ export default function CivicStudioPage() {
                 role="tab"
                 aria-selected={activeTab === "brief"}
                 onClick={() => setActiveTab("brief")}
-                className={`px-3.5 py-1.5 rounded-t-lg font-semibold transition cursor-pointer ${
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-t-lg font-semibold transition cursor-pointer text-xs ${
                   activeTab === "brief"
                     ? "bg-card border-t border-x border-border text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Civic Briefing
+                <FileText className="h-4 w-4 text-primary" />
+                <span>Civic Briefing</span>
               </button>
               <button
                 type="button"
                 role="tab"
                 aria-selected={activeTab === "table"}
                 onClick={() => setActiveTab("table")}
-                className={`px-3.5 py-1.5 rounded-t-lg font-semibold transition cursor-pointer ${
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-t-lg font-semibold transition cursor-pointer text-xs ${
                   activeTab === "table"
                     ? "bg-card border-t border-x border-border text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Audited Telemetry Table ({analysis?.normalizedRows.length || 0})
+                <Table className="h-4 w-4 text-primary" />
+                <span>Audited Telemetry Table ({analysis?.normalizedRows.length || 0})</span>
               </button>
               <button
                 type="button"
                 role="tab"
                 aria-selected={activeTab === "flags"}
                 onClick={() => setActiveTab("flags")}
-                className={`px-3.5 py-1.5 rounded-t-lg font-semibold transition cursor-pointer flex items-center gap-1.5 ${
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-t-lg font-semibold transition cursor-pointer text-xs ${
                   activeTab === "flags"
                     ? "bg-card border-t border-x border-border text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
+                <AlertOctagon className="h-4 w-4 text-amber-500" />
                 <span>Sensor Flags</span>
                 {analysis && analysis.flags.length > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400 font-mono text-[10px] font-bold">
+                  <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-mono text-[10px] font-bold">
                     {analysis.flags.length}
                   </span>
                 )}
@@ -581,14 +625,14 @@ export default function CivicStudioPage() {
             </div>
           </div>
 
-          {/* Chronological Diff Panel */}
+          {/* Chronological Delta Panel */}
           <DiffPanel
             diff={diff}
             narrative={brief?.diffNarrative}
             onClearHistory={handleClearHistory}
           />
 
-          {/* Prominent Flags Panel (Never hidden) */}
+          {/* Sensor Flags Alert Panel */}
           {analysis && analysis.flags.length > 0 && (
             <FlagsPanel
               flags={analysis.flags}
@@ -599,7 +643,7 @@ export default function CivicStudioPage() {
             />
           )}
 
-          {/* Tab Content */}
+          {/* Tab Content Stream */}
           {activeTab === "brief" && (
             <>
               {brief && analysis ? (
@@ -610,21 +654,23 @@ export default function CivicStudioPage() {
                   auditInfo={auditInfo}
                 />
               ) : (
-                <div className="rounded-xl border border-dashed border-border bg-card/40 p-12 text-center space-y-3">
+                <div className="rounded-xl border border-dashed border-border bg-card/50 p-12 text-center space-y-4">
                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mx-auto">
                     <FileText className="h-6 w-6" />
                   </div>
-                  <h3 className="text-base font-bold text-foreground">
-                    No Civic Brief Generated Yet
-                  </h3>
-                  <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
-                    Select a sample dataset or paste custom air quality data on the left, then click "Generate Civic Briefing".
-                  </p>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-foreground">
+                      No Civic Briefing Generated Yet
+                    </h3>
+                    <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed text-pretty">
+                      Select a dataset profile on the left or paste ambient telemetry rows, then click &ldquo;Generate Civic Briefing&rdquo;.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={handleGenerateBrief}
                     disabled={isLoading || !analysis || analysis.normalizedRows.length === 0}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-xs hover:bg-primary/90 transition cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-xs hover:bg-primary/90 transition cursor-pointer disabled:opacity-50 shadow-xs"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
                     <span>Run Studio Pipeline</span>
@@ -654,7 +700,7 @@ export default function CivicStudioPage() {
         </div>
       </div>
 
-      {/* Fact Inspection Modal */}
+      {/* Fact Grounding Inspector Modal */}
       {selectedFact && analysis && (
         <FactModal
           fact={selectedFact}

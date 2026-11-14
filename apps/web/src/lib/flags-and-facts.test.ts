@@ -207,8 +207,8 @@ describe("Flags & Verifiable Facts Engine", () => {
 
     // Verify IDs are sequential F1, F2...
     expect(facts.length).toBeGreaterThan(3);
-    expect(facts[0].id).toBe("F1");
-    expect(facts[1].id).toBe("F2");
+    expect(facts[0]?.id).toBe("F1");
+    expect(facts[1]?.id).toBe("F2");
 
     // Fact categories
     const avgFact = facts.find((f) => f.category === "average" && f.station === "All Stations");
