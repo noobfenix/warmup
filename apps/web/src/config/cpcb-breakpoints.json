@@ -1,0 +1,134 @@
+{
+  "source": "Central Pollution Control Board (CPCB), India",
+  "standard": "National Air Quality Index (NAQI)",
+  "categories": [
+    {
+      "name": "Good",
+      "minAqi": 0,
+      "maxAqi": 50,
+      "color": "#16a34a",
+      "textColor": "#ffffff",
+      "healthStatement": "Minimal impact.",
+      "civicAdvisory": "Air quality is considered satisfactory, and air pollution poses little or no risk."
+    },
+    {
+      "name": "Satisfactory",
+      "minAqi": 51,
+      "maxAqi": 100,
+      "color": "#84cc16",
+      "textColor": "#000000",
+      "healthStatement": "Minor breathing discomfort to sensitive people.",
+      "civicAdvisory": "Air quality is acceptable; however, sensitive people may experience minor irritation."
+    },
+    {
+      "name": "Moderate",
+      "minAqi": 101,
+      "maxAqi": 200,
+      "color": "#eab308",
+      "textColor": "#000000",
+      "healthStatement": "Breathing discomfort to people with lungs, asthma and heart diseases.",
+      "civicAdvisory": "Sensitive groups should reduce prolonged outdoor exertion. Monitor local dust and combustion sources."
+    },
+    {
+      "name": "Poor",
+      "minAqi": 201,
+      "maxAqi": 300,
+      "color": "#f97316",
+      "textColor": "#ffffff",
+      "healthStatement": "Breathing discomfort to most people on prolonged exposure.",
+      "civicAdvisory": "Active children and adults, and people with respiratory disease, should avoid prolonged outdoor exertion."
+    },
+    {
+      "name": "Very Poor",
+      "minAqi": 301,
+      "maxAqi": 400,
+      "color": "#ef4444",
+      "textColor": "#ffffff",
+      "healthStatement": "Respiratory illness on prolonged exposure.",
+      "civicAdvisory": "Avoid morning outdoor walks/sports. Ward teams should deploy anti-smog guns and restrict waste burning."
+    },
+    {
+      "name": "Severe",
+      "minAqi": 401,
+      "maxAqi": 500,
+      "color": "#7f1d1d",
+      "textColor": "#ffffff",
+      "healthStatement": "Affects healthy people and seriously impacts those with existing diseases.",
+      "civicAdvisory": "Emergency response: halt construction, enforce school outdoor bans, run indoor filtration systems."
+    }
+  ],
+  "pollutants": {
+    "PM2.5": {
+      "unit": "ug/m3",
+      "averagingTime": "24-hr",
+      "breakpoints": [
+        { "cLow": 0, "cHigh": 30, "iLow": 0, "iHigh": 50 },
+        { "cLow": 31, "cHigh": 60, "iLow": 51, "iHigh": 100 },
+        { "cLow": 61, "cHigh": 90, "iLow": 101, "iHigh": 200 },
+        { "cLow": 91, "cHigh": 120, "iLow": 201, "iHigh": 300 },
+        { "cLow": 121, "cHigh": 250, "iLow": 301, "iHigh": 400 },
+        { "cLow": 250, "cHigh": 380, "iLow": 401, "iHigh": 500 }
+      ]
+    },
+    "PM10": {
+      "unit": "ug/m3",
+      "averagingTime": "24-hr",
+      "breakpoints": [
+        { "cLow": 0, "cHigh": 50, "iLow": 0, "iHigh": 50 },
+        { "cLow": 51, "cHigh": 100, "iLow": 51, "iHigh": 100 },
+        { "cLow": 101, "cHigh": 250, "iLow": 101, "iHigh": 200 },
+        { "cLow": 251, "cHigh": 350, "iLow": 201, "iHigh": 300 },
+        { "cLow": 351, "cHigh": 430, "iLow": 301, "iHigh": 400 },
+        { "cLow": 430, "cHigh": 500, "iLow": 401, "iHigh": 500 }
+      ]
+    },
+    "NO2": {
+      "unit": "ug/m3",
+      "averagingTime": "24-hr",
+      "breakpoints": [
+        { "cLow": 0, "cHigh": 40, "iLow": 0, "iHigh": 50 },
+        { "cLow": 41, "cHigh": 80, "iLow": 51, "iHigh": 100 },
+        { "cLow": 81, "cHigh": 180, "iLow": 101, "iHigh": 200 },
+        { "cLow": 181, "cHigh": 280, "iLow": 201, "iHigh": 300 },
+        { "cLow": 281, "cHigh": 400, "iLow": 301, "iHigh": 400 },
+        { "cLow": 400, "cHigh": 500, "iLow": 401, "iHigh": 500 }
+      ]
+    },
+    "SO2": {
+      "unit": "ug/m3",
+      "averagingTime": "24-hr",
+      "breakpoints": [
+        { "cLow": 0, "cHigh": 40, "iLow": 0, "iHigh": 50 },
+        { "cLow": 41, "cHigh": 80, "iLow": 51, "iHigh": 100 },
+        { "cLow": 81, "cHigh": 380, "iLow": 101, "iHigh": 200 },
+        { "cLow": 381, "cHigh": 800, "iLow": 201, "iHigh": 300 },
+        { "cLow": 801, "cHigh": 1600, "iLow": 301, "iHigh": 400 },
+        { "cLow": 1600, "cHigh": 2000, "iLow": 401, "iHigh": 500 }
+      ]
+    },
+    "CO": {
+      "unit": "mg/m3",
+      "averagingTime": "8-hr",
+      "breakpoints": [
+        { "cLow": 0, "cHigh": 1.0, "iLow": 0, "iHigh": 50 },
+        { "cLow": 1.1, "cHigh": 2.0, "iLow": 51, "iHigh": 100 },
+        { "cLow": 2.1, "cHigh": 10.0, "iLow": 101, "iHigh": 200 },
+        { "cLow": 10.1, "cHigh": 17.0, "iLow": 201, "iHigh": 300 },
+        { "cLow": 17.1, "cHigh": 34.0, "iLow": 301, "iHigh": 400 },
+        { "cLow": 34.0, "cHigh": 50.0, "iLow": 401, "iHigh": 500 }
+      ]
+    },
+    "O3": {
+      "unit": "ug/m3",
+      "averagingTime": "8-hr",
+      "breakpoints": [
+        { "cLow": 0, "cHigh": 50, "iLow": 0, "iHigh": 50 },
+        { "cLow": 51, "cHigh": 100, "iLow": 51, "iHigh": 100 },
+        { "cLow": 101, "cHigh": 168, "iLow": 101, "iHigh": 200 },
+        { "cLow": 169, "cHigh": 208, "iLow": 201, "iHigh": 300 },
+        { "cLow": 209, "cHigh": 748, "iLow": 301, "iHigh": 400 },
+        { "cLow": 748, "cHigh": 1000, "iLow": 401, "iHigh": 500 }
+      ]
+    }
+  }
+}

@@ -1,0 +1,3 @@
+{
+  "extends": "@warmup/config/tsconfig.base.json"
+}
