@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
+import { getCorsHeaders } from "../../../lib/security";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, {
+    status: 204,
+    headers: getCorsHeaders(req, "GET, OPTIONS"),
+  });
+}
+
+export async function GET(req: Request) {
+  const corsHeaders = getCorsHeaders(req, "GET, OPTIONS");
   return NextResponse.json(
     {
       status: "ok",
@@ -14,6 +23,7 @@ export async function GET() {
       status: 200,
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate",
+        ...corsHeaders,
       },
     }
   );

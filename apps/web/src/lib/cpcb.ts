@@ -104,17 +104,22 @@ export interface PollutantValues {
   "AQI"?: number | null;
 }
 
-/**
- * Calculates overall AQI:
- * Per CPCB guidelines, AQI is max(sub-index) across monitored pollutants,
- * typically requiring at least PM10 or PM2.5.
- * If direct AQI is already provided in data, returns provided or computed max.
- */
-export function calculateRowAqi(values: PollutantValues): {
+export interface RowAqiResult {
   aqi: number | null;
   dominantPollutant: string | null;
   subIndices: Record<string, number>;
-} {
+  isOfficialNaqi: boolean;
+  criteriaNote: string;
+}
+
+/**
+ * Calculates overall AQI:
+ * Per official CPCB NAQI guidelines, official AQI reporting requires:
+ * 1. At least 3 monitored pollutants with valid sub-indices.
+ * 2. At least one must be a particulate matter (PM2.5 or PM10).
+ * If direct AQI is provided in data, returns provided AQI.
+ */
+export function calculateRowAqi(values: PollutantValues): RowAqiResult {
   const subIndices: Record<string, number> = {};
   let maxSubIndex = -1;
   let dominant: string | null = null;
@@ -135,11 +140,19 @@ export function calculateRowAqi(values: PollutantValues): {
     }
   }
 
+  const monitoredPollutants = Object.keys(subIndices);
+  const hasParticulate = Boolean(
+    subIndices["PM2.5"] !== undefined || subIndices["PM10"] !== undefined
+  );
+  const meetsCpcbCriteria = monitoredPollutants.length >= 3 && hasParticulate;
+
   if (values.AQI !== undefined && values.AQI !== null && !isNaN(values.AQI)) {
     return {
       aqi: Math.round(values.AQI),
       dominantPollutant: dominant ?? "AQI",
       subIndices,
+      isOfficialNaqi: true,
+      criteriaNote: "Direct AQI provided from certified instrument",
     };
   }
 
@@ -148,6 +161,12 @@ export function calculateRowAqi(values: PollutantValues): {
       aqi: maxSubIndex,
       dominantPollutant: dominant,
       subIndices,
+      isOfficialNaqi: meetsCpcbCriteria,
+      criteriaNote: meetsCpcbCriteria
+        ? "Meets CPCB NAQI reporting criteria (>=3 pollutants with PM2.5 or PM10)"
+        : `Sub-index only (${monitoredPollutants.length}/3 pollutants, ${
+            hasParticulate ? "has PM" : "missing PM2.5/PM10"
+          }): does not meet full CPCB NAQI protocol`,
     };
   }
 
@@ -155,5 +174,7 @@ export function calculateRowAqi(values: PollutantValues): {
     aqi: null,
     dominantPollutant: null,
     subIndices,
+    isOfficialNaqi: false,
+    criteriaNote: "No measurable pollutant concentrations",
   };
 }

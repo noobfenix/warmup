@@ -7,10 +7,18 @@ import {
   parseJsonWithLimit,
   sanitizePromptText,
   DEFAULT_MAX_BODY_BYTES,
+  getCorsHeaders,
 } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
+
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, {
+    status: 204,
+    headers: getCorsHeaders(req),
+  });
+}
 
 interface MapColumnsRequest {
   headers: string[];
@@ -50,12 +58,13 @@ Return JSON adhering strictly to:
 }`;
 
 export async function POST(req: Request) {
+  const corsHeaders = getCorsHeaders(req);
   const clientIp = getClientIp(req);
   const rateLimit = apiRateLimiter.check(clientIp);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "Rate limit exceeded. Please wait before retrying." },
-      { status: 429 }
+      { status: 429, headers: corsHeaders }
     );
   }
 
@@ -64,7 +73,7 @@ export async function POST(req: Request) {
     if (parseResult.error || !parseResult.data) {
       return NextResponse.json(
         { error: parseResult.error || "Invalid request body." },
-        { status: parseResult.status || 400 }
+        { status: parseResult.status || 400, headers: corsHeaders }
       );
     }
 
@@ -72,7 +81,7 @@ export async function POST(req: Request) {
     if (!body || !Array.isArray(body.headers) || body.headers.length === 0) {
       return NextResponse.json(
         { error: "Invalid request: 'headers' array is required." },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -80,7 +89,7 @@ export async function POST(req: Request) {
     if (body.headers.length > 50) {
       return NextResponse.json(
         { error: "Payload exceeds maximum allowed headers count of 50." },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -92,7 +101,7 @@ export async function POST(req: Request) {
     if (sanitizedHeaders.length === 0) {
       return NextResponse.json(
         { error: "No valid headers provided after sanitization." },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -114,10 +123,13 @@ export async function POST(req: Request) {
         });
 
         if (geminiResult && geminiResult.stationColumn && Array.isArray(geminiResult.mappings)) {
-          return NextResponse.json({
-            source: "gemini",
-            mapping: geminiResult,
-          });
+          return NextResponse.json(
+            {
+              source: "gemini",
+              mapping: geminiResult,
+            },
+            { status: 200, headers: corsHeaders }
+          );
         }
       } catch (geminiErr) {
         console.warn("Gemini column mapping fallback:", geminiErr);
@@ -126,15 +138,18 @@ export async function POST(req: Request) {
 
     // Deterministic heuristic fallback
     const heuristicResult = heuristicMapColumns(sanitizedHeaders);
-    return NextResponse.json({
-      source: "heuristic",
-      mapping: heuristicResult,
-    });
+    return NextResponse.json(
+      {
+        source: "heuristic",
+        mapping: heuristicResult,
+      },
+      { status: 200, headers: corsHeaders }
+    );
   } catch (error) {
     console.error("Column mapping endpoint error:", error);
     return NextResponse.json(
       { error: "Failed to map table columns." },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

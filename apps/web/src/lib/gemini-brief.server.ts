@@ -167,29 +167,24 @@ CRITICAL INVARIANTS & ETHICAL GUARDRAILS:
 8. NEVER HIDE FLAGGED DATA: If telemetry flags exist in the input, acknowledge them as open data quality observations.
 9. RETURN VALID JSON: Conforming strictly to the requested schema.`;
 
-  // Defensively bound and sanitize facts to prevent context explosion and prompt injection
+  // Defensively bound and sanitize facts to prevent context explosion and streamline LLM token budget
   const factsListText = (req.facts || [])
     .slice(0, 35)
     .map((f) => {
       const cleanId = sanitizePromptText(f.id, 10);
       const cleanCat = sanitizePromptText(f.category, 20).toUpperCase();
       const cleanStation = sanitizePromptText(f.station, 60);
-      const cleanMetric = sanitizePromptText(f.metric, 20);
-      const cleanVal = typeof f.value === "number" ? f.value : sanitizePromptText(f.value, 20);
-      const cleanUnit = sanitizePromptText(f.unit, 15);
       const cleanStmt = sanitizePromptText(f.statement, 250);
-      const cleanCpcb = f.cpcbCategory ? sanitizePromptText(f.cpcbCategory, 20) : "";
+      const cleanCpcb = f.cpcbCategory ? `/${sanitizePromptText(f.cpcbCategory, 20)}` : "";
       const cleanRows = Array.isArray(f.sourceRowIndices)
         ? f.sourceRowIndices.slice(0, 20).join(", ")
         : "";
 
-      return `[${cleanId}] (${cleanCat}) Station: "${cleanStation}" | Metric: ${cleanMetric}=${cleanVal} ${cleanUnit} ${
-        cleanCpcb ? `(CPCB: ${cleanCpcb})` : ""
-      } -> Statement: "${cleanStmt}" (Source Rows: ${cleanRows})`;
+      return `[${cleanId}] [${cleanCat}${cleanCpcb}] "${cleanStation}": ${cleanStmt} (Rows: ${cleanRows})`;
     })
     .join("\n");
 
-  // Defensively bound and sanitize flags
+  // Defensively bound and sanitize flags with streamlined formatting
   const flagsListText = (req.flags || [])
     .slice(0, 50)
     .map((fl) => {
@@ -200,7 +195,7 @@ CRITICAL INVARIANTS & ETHICAL GUARDRAILS:
       const cleanRaw = sanitizePromptText(fl.rawValue, 30);
       const cleanDesc = sanitizePromptText(fl.description, 200);
 
-      return `[${cleanId}] (${cleanType}) Station: "${cleanStation}" | Row ${fl.sourceRowIndex} (${cleanCol}='${cleanRaw}'): ${cleanDesc}`;
+      return `[${cleanId}] [${cleanType}] "${cleanStation}" Row ${fl.sourceRowIndex} (${cleanCol}='${cleanRaw}'): ${cleanDesc}`;
     })
     .join("\n");
 

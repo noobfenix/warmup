@@ -46,13 +46,13 @@ export function FlagsPanel({ flags, onSelectRow }: FlagsPanelProps) {
   const getBadgeColor = (type: FlagType) => {
     switch (type) {
       case "impossible":
-        return "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30";
+        return "bg-rose-500/15 text-rose-800 dark:text-rose-400 border-rose-500/30";
       case "stuck_value":
-        return "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30";
+        return "bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-500/30";
       case "duplicate":
-        return "bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30";
+        return "bg-orange-500/15 text-orange-900 dark:text-orange-300 border-orange-500/30";
       case "missing":
-        return "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30";
+        return "bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30";
     }
   };
 
@@ -64,7 +64,7 @@ export function FlagsPanel({ flags, onSelectRow }: FlagsPanelProps) {
           <span className="font-semibold text-xs text-foreground uppercase tracking-wide">
             Sensor Telemetry Flags &amp; Anomalies ({flags.length} Flagged)
           </span>
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/30">
             Never Hidden (Rule 3)
           </span>
         </div>
@@ -109,7 +109,7 @@ export function FlagsPanel({ flags, onSelectRow }: FlagsPanelProps) {
               className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
                 filterType === "impossible"
                   ? "bg-rose-500 text-white font-semibold shadow-xs"
-                  : "bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/25"
+                  : "bg-rose-500/10 text-rose-800 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/25"
               }`}
             >
               Impossible Readings ({counts.impossible})
@@ -120,7 +120,7 @@ export function FlagsPanel({ flags, onSelectRow }: FlagsPanelProps) {
               className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
                 filterType === "stuck_value"
                   ? "bg-amber-500 text-black font-semibold shadow-xs"
-                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 border border-amber-500/25"
+                  : "bg-amber-500/10 text-amber-900 dark:text-amber-300 hover:bg-amber-500/20 border border-amber-500/25"
               }`}
             >
               Stuck Values ({counts.stuck_value})
@@ -131,7 +131,7 @@ export function FlagsPanel({ flags, onSelectRow }: FlagsPanelProps) {
               className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
                 filterType === "missing"
                   ? "bg-sky-500 text-white font-semibold shadow-xs"
-                  : "bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 border border-sky-500/25"
+                  : "bg-sky-500/10 text-sky-800 dark:text-sky-300 hover:bg-sky-500/20 border border-sky-500/25"
               }`}
             >
               Missing Values ({counts.missing})
@@ -142,7 +142,7 @@ export function FlagsPanel({ flags, onSelectRow }: FlagsPanelProps) {
               className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
                 filterType === "duplicate"
                   ? "bg-orange-500 text-white font-semibold shadow-xs"
-                  : "bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 border border-orange-500/25"
+                  : "bg-orange-500/10 text-orange-900 dark:text-orange-300 hover:bg-orange-500/20 border border-orange-500/25"
               }`}
             >
               Duplicates ({counts.duplicate})
@@ -152,10 +152,12 @@ export function FlagsPanel({ flags, onSelectRow }: FlagsPanelProps) {
           {/* Flags List */}
           <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
             {filteredFlags.map((flag) => (
-              <div
+              <button
                 key={flag.id}
+                type="button"
+                aria-label={`Inspect flagged row ${flag.sourceRowIndex}: ${flag.description}`}
                 onClick={() => onSelectRow && onSelectRow(flag.sourceRowIndex)}
-                className="group flex items-start justify-between gap-3 p-3 rounded-lg border border-border bg-background hover:border-amber-500/40 hover:bg-amber-500/5 transition cursor-pointer"
+                className="w-full text-left group flex items-start justify-between gap-3 p-3 rounded-lg border border-border bg-background hover:border-amber-500/40 hover:bg-amber-500/5 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <div className="flex items-start gap-2.5">
                   <span
@@ -187,7 +189,7 @@ export function FlagsPanel({ flags, onSelectRow }: FlagsPanelProps) {
                   Inspect #{flag.sourceRowIndex}
                   <ArrowRight className="h-3 w-3" />
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>

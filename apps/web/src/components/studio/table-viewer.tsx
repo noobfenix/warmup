@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import type { NormalizedRow } from "@/lib/table-parser";
 import { Table, Layers, Search } from "lucide-react";
 
@@ -19,29 +19,32 @@ export function TableViewer({ rows, highlightedRowIndices = [], onSelectRow }: T
   const getCategoryBadgeClass = (category: string | null) => {
     switch (category) {
       case "Good":
-        return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30";
+        return "bg-emerald-500/15 text-emerald-800 dark:text-emerald-400 border-emerald-500/30";
       case "Satisfactory":
-        return "bg-lime-500/15 text-lime-600 dark:text-lime-400 border-lime-500/30";
+        return "bg-lime-500/15 text-lime-800 dark:text-lime-400 border-lime-500/30";
       case "Moderate":
-        return "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30";
+        return "bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-500/30";
       case "Poor":
-        return "bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30";
+        return "bg-orange-500/15 text-orange-900 dark:text-orange-300 border-orange-500/30";
       case "Very Poor":
-        return "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30";
+        return "bg-rose-500/15 text-rose-800 dark:text-rose-400 border-rose-500/30";
       case "Severe":
-        return "bg-rose-950/40 text-rose-500 dark:text-rose-400 border-rose-500/40 font-bold";
+        return "bg-rose-950/40 text-rose-900 dark:text-rose-300 border-rose-500/40 font-bold";
       default:
         return "bg-muted text-muted-foreground border-border";
     }
   };
 
-  const filteredRows = searchQuery.trim()
-    ? rows.filter((r) =>
-        r.station.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.cpcbCategory?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (r.timestamp && r.timestamp.includes(searchQuery))
-      )
-    : rows;
+  const filteredRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) =>
+        r.station.toLowerCase().includes(q) ||
+        (r.cpcbCategory && r.cpcbCategory.toLowerCase().includes(q)) ||
+        (r.timestamp && r.timestamp.toLowerCase().includes(q))
+    );
+  }, [rows, searchQuery]);
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs space-y-0">
@@ -91,7 +94,10 @@ export function TableViewer({ rows, highlightedRowIndices = [], onSelectRow }: T
           <caption className="sr-only">Audited air quality telemetry table records and CPCB statuses</caption>
           <thead className="bg-muted/80 text-muted-foreground font-mono text-[11px] uppercase tracking-wider border-b border-border sticky top-0 z-10 backdrop-blur-md">
             <tr>
-              <th scope="col" className="p-3 pl-4">#</th>
+              <th scope="col" className="p-3 pl-4">
+                <span className="sr-only">Row Number</span>
+                <span aria-hidden="true">#</span>
+              </th>
               <th scope="col" className="p-3">Station / Location</th>
               <th scope="col" className="p-3">Timestamp</th>
               <th scope="col" className="p-3 font-mono text-right">PM2.5</th>

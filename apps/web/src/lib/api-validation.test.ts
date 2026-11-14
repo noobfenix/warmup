@@ -1,10 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
 import {
   validateBriefParameters,
   validateApiKeyFormat,
   sanitizePromptText,
   sanitizeCsvCell,
-  InMemoryRateLimiter,
   parseJsonWithLimit,
   ALLOWED_AUDIENCES,
   ALLOWED_LANGUAGES,
@@ -135,6 +137,22 @@ describe("API Validation & Security Boundary Defense Suite", () => {
       expect(res.status).toBeUndefined();
       expect(res.data?.station).toBe("Anand Vihar");
       expect(res.data?.aqi).toBe(420);
+    });
+  });
+
+  describe("CORS and Security Headers Verification", () => {
+    it("health OPTIONS preflight returns correct CORS headers", async () => {
+      const { OPTIONS: healthOptions } = await import(
+        "../app/api/health/route"
+      );
+      const req = new Request("http://localhost/api/health", {
+        method: "OPTIONS",
+        headers: { origin: "http://localhost:3000" },
+      });
+      const res = await healthOptions(req);
+      expect(res.status).toBe(204);
+      expect(res.headers.get("access-control-allow-origin")).toBe("http://localhost:3000");
+      expect(res.headers.get("access-control-allow-methods")).toContain("GET");
     });
   });
 });

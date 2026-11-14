@@ -146,6 +146,34 @@ describe("CPCB NAQI Comprehensive Mathematical Verification Suite", () => {
       expect(res.aqi).toBe(185);
     });
 
+    it("enforces official CPCB NAQI criteria: requires >=3 pollutants including PM2.5 or PM10", () => {
+      // 3 pollutants with PM2.5 -> meets criteria
+      const validNaqi = calculateRowAqi({
+        "PM2.5": 60,
+        "NO2": 40,
+        "SO2": 25,
+      });
+      expect(validNaqi.isOfficialNaqi).toBe(true);
+      expect(validNaqi.criteriaNote).toContain("Meets CPCB NAQI reporting criteria");
+
+      // 2 pollutants only -> sub-index only
+      const twoPollutants = calculateRowAqi({
+        "PM2.5": 60,
+        "NO2": 40,
+      });
+      expect(twoPollutants.isOfficialNaqi).toBe(false);
+      expect(twoPollutants.criteriaNote).toContain("Sub-index only");
+
+      // 3 pollutants but missing both PM2.5 and PM10 -> sub-index only
+      const noParticulate = calculateRowAqi({
+        "NO2": 40,
+        "SO2": 25,
+        "CO": 1.2,
+      });
+      expect(noParticulate.isOfficialNaqi).toBe(false);
+      expect(noParticulate.criteriaNote).toContain("missing PM2.5/PM10");
+    });
+
     it("handles rows with missing or zero pollutant values gracefully", () => {
       const res = calculateRowAqi({});
       expect(res.aqi).toBeNull();

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import {
   Sparkles,
@@ -23,7 +23,7 @@ import {
 import { analyzeRawTable } from "@/lib/analyze-table";
 import type { AnalysisOutput } from "@/lib/flags-and-facts";
 import { computeAirQualityDiff, type AirQualityDiff } from "@/lib/diff-engine";
-import type { CivicBriefResponse } from "@/lib/brief-validator";
+import type { CivicBriefResponse, BriefAuditInfo } from "@/lib/brief-validator";
 import type { SampleDataset } from "@/config/sample-datasets";
 import { SampleButtons } from "@/components/studio/sample-buttons";
 import { FlagsPanel } from "@/components/studio/flags-panel";
@@ -95,7 +95,7 @@ export default function CivicStudioPage() {
   // Analysis state
   const [analysis, setAnalysis] = useState<AnalysisOutput | null>(null);
   const [brief, setBrief] = useState<CivicBriefResponse | null>(null);
-  const [auditInfo, setAuditInfo] = useState<any>(null);
+  const [auditInfo, setAuditInfo] = useState<BriefAuditInfo | null>(null);
   const [diff, setDiff] = useState<AirQualityDiff | null>(null);
   const [briefParams, setBriefParams] = useState<{
     audience: typeof audience;
@@ -110,8 +110,22 @@ export default function CivicStudioPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"brief" | "table" | "flags">("brief");
 
+  // In-memory cache for synthesized briefs to avoid duplicate API calls for identical parameters
+  const briefCacheRef = useRef<Map<string, { brief: CivicBriefResponse; audit: BriefAuditInfo }>>(new Map());
+
+  // Debounce timer ref to prevent main-thread lag during manual text typing
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
   // Deterministic local processing in pure TypeScript
-  const processInputData = (text: string) => {
+  const processInputData = useCallback((text: string) => {
     try {
       setError(null);
       if (!text.trim()) {
@@ -131,16 +145,33 @@ export default function CivicStudioPage() {
       console.error("Data processing error:", err);
       setError("Failed to parse tabular data. Please ensure valid delimiter (comma, tab, semicolon) or JSON.");
     }
-  };
+  }, []);
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = e.target.value;
     setRawText(newText);
     setSelectedSampleId("");
-    processInputData(newText);
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    if (!newText.trim()) {
+      setAnalysis(null);
+      setError(null);
+      return;
+    }
+
+    // 250ms debounce for typing efficiency
+    debounceTimerRef.current = setTimeout(() => {
+      processInputData(newText);
+    }, 250);
   };
 
   const handleSelectSample = (sample: SampleDataset) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
     setSelectedSampleId(sample.id);
     setRawText(sample.data);
     setAudience(sample.defaultAudience);
@@ -149,6 +180,9 @@ export default function CivicStudioPage() {
   };
 
   const handleClearData = () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
     setRawText("");
     setSelectedSampleId("");
     setAnalysis(null);
@@ -164,6 +198,10 @@ export default function CivicStudioPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
@@ -177,10 +215,59 @@ export default function CivicStudioPage() {
     reader.readAsText(file);
   };
 
-  // Generate Briefing flow
+  // Keyboard navigation for ARIA tablist
+  const handleTabKeyDown = (e: React.KeyboardEvent) => {
+    const tabList: ("brief" | "table" | "flags")[] = ["brief", "table", "flags"];
+    const currentIndex = tabList.indexOf(activeTab);
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      const nextTab = tabList[(currentIndex + 1) % tabList.length];
+      setActiveTab(nextTab);
+      document.getElementById(`tab-${nextTab}`)?.focus();
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      const prevTab = tabList[(currentIndex - 1 + tabList.length) % tabList.length];
+      setActiveTab(prevTab);
+      document.getElementById(`tab-${prevTab}`)?.focus();
+    }
+  };
+
+  // Generate Briefing flow with in-memory caching
   const handleGenerateBrief = async () => {
     if (!analysis || analysis.normalizedRows.length === 0) {
       setError("Please paste or load tabular air quality data first.");
+      return;
+    }
+
+    // Cache key based on data signature and briefing options
+    const cacheKey = `${analysis.normalizedRows.length}_${analysis.summary.overallAverageAqi}_${analysis.summary.peakAqi}_${audience}_${language}_${readingLevel}_${customKey.trim()}`;
+
+    // Read previous brief for chronological diff
+    let previousRecord: StoredBriefRecord | null = null;
+    try {
+      const storedJson = localStorage.getItem(STORAGE_KEY);
+      if (storedJson) {
+        previousRecord = JSON.parse(storedJson);
+      }
+    } catch (e) {
+      console.warn("Could not read previous brief from storage:", e);
+    }
+
+    const calculatedDiff = computeAirQualityDiff(
+      analysis,
+      previousRecord?.analysis || null,
+      previousRecord?.timestamp
+    );
+
+    // If already generated in this session with identical inputs, reuse instantaneously
+    if (briefCacheRef.current.has(cacheKey)) {
+      const cached = briefCacheRef.current.get(cacheKey)!;
+      setDiff(calculatedDiff);
+      setBrief(cached.brief);
+      setBriefParams({ audience, language, readingLevel });
+      setAuditInfo(cached.audit);
+      setActiveTab("brief");
+      toast.success("Loaded briefing from instantaneous session cache!");
       return;
     }
 
@@ -188,23 +275,6 @@ export default function CivicStudioPage() {
     setError(null);
 
     try {
-      // Check localStorage for previous brief
-      let previousRecord: StoredBriefRecord | null = null;
-      try {
-        const storedJson = localStorage.getItem(STORAGE_KEY);
-        if (storedJson) {
-          previousRecord = JSON.parse(storedJson);
-        }
-      } catch (e) {
-        console.warn("Could not read previous brief from storage:", e);
-      }
-
-      // Compute code-based deterministic diff
-      const calculatedDiff = computeAirQualityDiff(
-        analysis,
-        previousRecord?.analysis || null,
-        previousRecord?.timestamp
-      );
       // Call server API
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (customKey.trim()) {
@@ -232,10 +302,15 @@ export default function CivicStudioPage() {
       }
 
       const generatedBrief: CivicBriefResponse = responseData.data;
+      const returnedAudit: BriefAuditInfo = responseData.audit;
+
+      // Update in-memory session cache
+      briefCacheRef.current.set(cacheKey, { brief: generatedBrief, audit: returnedAudit });
+
       setDiff(calculatedDiff);
       setBrief(generatedBrief);
       setBriefParams({ audience, language, readingLevel });
-      setAuditInfo(responseData.audit);
+      setAuditInfo(returnedAudit);
       setActiveTab("brief");
 
       // Save to localStorage for chronological comparison
@@ -251,9 +326,9 @@ export default function CivicStudioPage() {
       }
 
       toast.success("Civic briefing successfully synthesized and audited!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Brief generation error:", err);
-      const msg = err.message || "An error occurred while generating the briefing.";
+      const msg = err instanceof Error ? err.message : "An error occurred while generating the briefing.";
       setError(msg);
       toast.error(msg);
     } finally {
@@ -541,14 +616,16 @@ export default function CivicStudioPage() {
 
                 {showKeyInput && (
                   <div className="mt-2 space-y-2 bg-muted/40 p-3 rounded-lg border border-border">
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <label htmlFor="custom-gemini-key-input" className="text-[11px] text-muted-foreground leading-relaxed block">
                       Supplied strictly through HTTP header to the server API endpoint:
-                    </p>
+                    </label>
                     <input
+                      id="custom-gemini-key-input"
                       type="password"
                       value={customKey}
                       onChange={(e) => setCustomKey(e.target.value)}
                       placeholder="AIzaSy..."
+                      aria-label="Custom Gemini API Key"
                       className="w-full text-xs font-mono p-2 rounded-md bg-background border border-border focus:ring-1 focus:ring-primary focus:outline-none"
                     />
                   </div>
@@ -591,13 +668,71 @@ export default function CivicStudioPage() {
 
         {/* Right Column (7 Cols): Output Center */}
         <div className="lg:col-span-7 space-y-6">
+          {/* Real-time Telemetry KPI Overview (At-a-Glance) */}
+          {analysis && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3.5 rounded-xl border border-border bg-card shadow-xs">
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider block">Network Avg AQI</span>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-xl font-bold font-mono text-foreground">
+                    {analysis.summary.overallAverageAqi ?? "—"}
+                  </span>
+                  {analysis.summary.overallCategory && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                      {analysis.summary.overallCategory}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl border border-border bg-card shadow-xs">
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider block">Peak Hotspot</span>
+                <div className="mt-1">
+                  <span className="text-sm font-bold text-foreground block truncate">
+                    {analysis.summary.peakStation ?? "—"}
+                  </span>
+                  <span className="text-[11px] font-mono text-rose-600 dark:text-rose-400">
+                    AQI {analysis.summary.peakAqi ?? "—"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl border border-border bg-card shadow-xs">
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider block">Cleanest Zone</span>
+                <div className="mt-1">
+                  <span className="text-sm font-bold text-foreground block truncate">
+                    {analysis.summary.cleanestStation ?? "—"}
+                  </span>
+                  <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
+                    AQI {analysis.summary.cleanestAqi ?? "—"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl border border-border bg-card shadow-xs">
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider block">Sensor Quality</span>
+                <div className="mt-1">
+                  <span className={`text-sm font-bold block ${analysis.summary.flaggedRowsCount > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                    {analysis.summary.flaggedRowsCount === 0 ? "100% Clean" : `${analysis.summary.flaggedRowsCount} Flagged Rows`}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground font-mono">
+                    {analysis.flags.length} sensor flags
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Tab Navigation */}
           <div className="flex items-center justify-between border-b border-border pb-1">
-            <div className="flex gap-2 text-xs" role="tablist">
+            <div className="flex gap-2 text-xs" role="tablist" aria-label="Studio View Tabs" onKeyDown={handleTabKeyDown}>
               <button
                 type="button"
+                id="tab-brief"
                 role="tab"
                 aria-selected={activeTab === "brief"}
+                aria-controls="panel-brief"
+                tabIndex={activeTab === "brief" ? 0 : -1}
                 onClick={() => setActiveTab("brief")}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-t-lg font-semibold transition cursor-pointer text-xs ${
                   activeTab === "brief"
@@ -605,13 +740,16 @@ export default function CivicStudioPage() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <FileText className="h-4 w-4 text-primary" />
+                <FileText className="h-4 w-4 text-primary" aria-hidden="true" />
                 <span>Civic Briefing</span>
               </button>
               <button
                 type="button"
+                id="tab-table"
                 role="tab"
                 aria-selected={activeTab === "table"}
+                aria-controls="panel-table"
+                tabIndex={activeTab === "table" ? 0 : -1}
                 onClick={() => setActiveTab("table")}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-t-lg font-semibold transition cursor-pointer text-xs ${
                   activeTab === "table"
@@ -619,13 +757,16 @@ export default function CivicStudioPage() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Table className="h-4 w-4 text-primary" />
+                <Table className="h-4 w-4 text-primary" aria-hidden="true" />
                 <span>Audited Telemetry Table ({analysis?.normalizedRows.length || 0})</span>
               </button>
               <button
                 type="button"
+                id="tab-flags"
                 role="tab"
                 aria-selected={activeTab === "flags"}
+                aria-controls="panel-flags"
+                tabIndex={activeTab === "flags" ? 0 : -1}
                 onClick={() => setActiveTab("flags")}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-t-lg font-semibold transition cursor-pointer text-xs ${
                   activeTab === "flags"
@@ -633,7 +774,7 @@ export default function CivicStudioPage() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <AlertOctagon className="h-4 w-4 text-amber-500" />
+                <AlertOctagon className="h-4 w-4 text-amber-500" aria-hidden="true" />
                 <span>Sensor Flags</span>
                 {analysis && analysis.flags.length > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-mono text-[10px] font-bold">
@@ -664,7 +805,7 @@ export default function CivicStudioPage() {
 
           {/* Tab Content Stream */}
           {activeTab === "brief" && (
-            <>
+            <div role="tabpanel" id="panel-brief" aria-labelledby="tab-brief" tabIndex={0} className="outline-none space-y-6">
               {brief && analysis && briefIsStale && (
                 <div
                   role="status"
@@ -695,7 +836,7 @@ export default function CivicStudioPage() {
               ) : (
                 <div className="rounded-xl border border-dashed border-border bg-card/50 p-12 text-center space-y-4">
                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mx-auto">
-                    <FileText className="h-6 w-6" />
+                    <FileText className="h-6 w-6" aria-hidden="true" />
                   </div>
                   <div className="space-y-1">
                     <h3 className="text-base font-bold text-foreground">
@@ -711,30 +852,34 @@ export default function CivicStudioPage() {
                     disabled={isLoading || !analysis || analysis.normalizedRows.length === 0}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-xs hover:bg-primary/90 transition cursor-pointer disabled:opacity-50 shadow-xs"
                   >
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>Run Studio Pipeline</span>
                   </button>
                 </div>
               )}
-            </>
+            </div>
           )}
 
           {activeTab === "table" && analysis && (
-            <TableViewer
-              rows={analysis.normalizedRows}
-              highlightedRowIndices={highlightedRowIndices}
-              onSelectRow={(idx) => setHighlightedRowIndices([idx])}
-            />
+            <div role="tabpanel" id="panel-table" aria-labelledby="tab-table" tabIndex={0} className="outline-none">
+              <TableViewer
+                rows={analysis.normalizedRows}
+                highlightedRowIndices={highlightedRowIndices}
+                onSelectRow={(idx) => setHighlightedRowIndices([idx])}
+              />
+            </div>
           )}
 
           {activeTab === "flags" && analysis && (
-            <FlagsPanel
-              flags={analysis.flags}
-              onSelectRow={(rowIndex) => {
-                setHighlightedRowIndices([rowIndex]);
-                setActiveTab("table");
-              }}
-            />
+            <div role="tabpanel" id="panel-flags" aria-labelledby="tab-flags" tabIndex={0} className="outline-none">
+              <FlagsPanel
+                flags={analysis.flags}
+                onSelectRow={(rowIndex) => {
+                  setHighlightedRowIndices([rowIndex]);
+                  setActiveTab("table");
+                }}
+              />
+            </div>
           )}
         </div>
       </div>

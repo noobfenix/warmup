@@ -16,8 +16,9 @@ import {
   ExternalLink,
   Printer,
   Sparkles,
+  Download,
 } from "lucide-react";
-import type { CivicBriefResponse } from "@/lib/brief-validator";
+import type { CivicBriefResponse, BriefAuditInfo } from "@/lib/brief-validator";
 import type { ComputedFact } from "@/lib/flags-and-facts";
 
 interface BriefViewProps {
@@ -25,12 +26,7 @@ interface BriefViewProps {
   facts: ComputedFact[];
   onSelectFact: (factId: string) => void;
   lang?: string;
-  auditInfo?: {
-    groundingScore: number;
-    passedAuditing: boolean;
-    rejectedFindingsCount: number;
-    rejectedFindings?: any[];
-  };
+  auditInfo?: BriefAuditInfo | null;
 }
 
 export function BriefView({ brief, facts, onSelectFact, auditInfo, lang = "en" }: BriefViewProps) {
@@ -50,6 +46,19 @@ export function BriefView({ brief, facts, onSelectFact, auditInfo, lang = "en" }
       setCopiedMarkdown(true);
       setTimeout(() => setCopiedMarkdown(false), 2000);
     }
+  };
+
+  const downloadMarkdownBrief = () => {
+    const content = generateMarkdownBrief();
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `civic-brief-${brief.audience}-${brief.language}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const generateMarkdownBrief = () => {
@@ -154,32 +163,45 @@ ${brief.internalBriefingNote}
           </div>
 
           {/* Action Toolbar */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap" role="toolbar" aria-label="Brief actions">
+            <button
+              type="button"
+              onClick={downloadMarkdownBrief}
+              aria-label="Download briefing as Markdown file"
+              className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition cursor-pointer shadow-xs font-medium"
+              title="Download Markdown brief"
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Download .md</span>
+            </button>
             <button
               type="button"
               onClick={() => copyToClipboard(generateMarkdownBrief(), "markdown")}
+              aria-label="Copy formatted Markdown brief to clipboard"
               className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition cursor-pointer shadow-xs font-medium"
               title="Copy formatted Markdown brief"
             >
-              {copiedMarkdown ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+              {copiedMarkdown ? <Check className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
               <span>{copiedMarkdown ? "Copied" : "Copy Brief"}</span>
             </button>
             <button
               type="button"
               onClick={() => copyToClipboard(JSON.stringify(brief, null, 2), "full")}
+              aria-label="Export structured JSON to clipboard"
               className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition cursor-pointer shadow-xs font-medium"
               title="Export structured JSON"
             >
-              {copiedFull ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <FileText className="h-3.5 w-3.5" />}
+              {copiedFull ? <Check className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" /> : <FileText className="h-3.5 w-3.5" aria-hidden="true" />}
               <span>{copiedFull ? "Copied" : "JSON"}</span>
             </button>
             <button
               type="button"
               onClick={() => window.print()}
+              aria-label="Print or save as PDF"
               className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 p-1.5 rounded-lg border border-border bg-background hover:bg-muted transition cursor-pointer shadow-xs"
-              title="Print Brief"
+              title="Print or export to PDF"
             >
-              <Printer className="h-4 w-4" />
+              <Printer className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -256,11 +278,12 @@ ${brief.internalBriefingNote}
                         key={fId}
                         type="button"
                         onClick={() => onSelectFact(fId)}
+                        aria-label={`Inspect source telemetry data rows for fact ${fId}`}
                         className="inline-flex items-center gap-1 font-mono text-xs font-bold px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition cursor-pointer"
                         title={`Inspect source data rows for ${fId}`}
                       >
                         <span>{fId}</span>
-                        <ExternalLink className="h-2.5 w-2.5 opacity-60" />
+                        <ExternalLink className="h-2.5 w-2.5 opacity-60" aria-hidden="true" />
                       </button>
                     ))}
                   </div>
@@ -311,6 +334,7 @@ ${brief.internalBriefingNote}
                             key={id}
                             type="button"
                             onClick={() => onSelectFact(id)}
+                            aria-label={`View evidence rows for fact ${id}`}
                             className="text-xs font-bold text-primary hover:underline cursor-pointer"
                           >
                             {id}
@@ -391,9 +415,10 @@ ${brief.internalBriefingNote}
             <button
               type="button"
               onClick={() => copyToClipboard(brief.internalBriefingNote, "note")}
+              aria-label="Copy administrative internal briefing note"
               className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-border bg-muted cursor-pointer transition"
             >
-              {copiedNote ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+              {copiedNote ? <Check className="h-3 w-3 text-emerald-500" aria-hidden="true" /> : <Copy className="h-3 w-3" aria-hidden="true" />}
               <span>{copiedNote ? "Copied" : "Copy Note"}</span>
             </button>
           </div>

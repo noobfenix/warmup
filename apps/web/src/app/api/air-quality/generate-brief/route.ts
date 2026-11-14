@@ -8,18 +8,30 @@ import {
   validateBriefParameters,
   validateApiKeyFormat,
   BRIEF_MAX_BODY_BYTES,
+  getCorsHeaders,
 } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+export async function OPTIONS(req: Request) {
+  return new NextResponse(null, {
+    status: 204,
+    headers: getCorsHeaders(req),
+  });
+}
+
 export async function POST(req: Request) {
+  const corsHeaders = getCorsHeaders(req);
   const clientIp = getClientIp(req);
   const rateLimit = apiRateLimiter.check(clientIp);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: "Rate limit exceeded. Please wait a moment before requesting another briefing." },
-      { status: 429 }
+      {
+        status: 429,
+        headers: corsHeaders,
+      }
     );
   }
 
@@ -28,7 +40,10 @@ export async function POST(req: Request) {
     if (parseResult.error || !parseResult.data) {
       return NextResponse.json(
         { error: parseResult.error || "Invalid request body." },
-        { status: parseResult.status || 400 }
+        {
+          status: parseResult.status || 400,
+          headers: corsHeaders,
+        }
       );
     }
 
@@ -45,14 +60,14 @@ export async function POST(req: Request) {
     if (body.facts.length > 50) {
       return NextResponse.json(
         { error: "Payload exceeds maximum allowed facts limit of 50." },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
     if (body.flags && Array.isArray(body.flags) && body.flags.length > 100) {
       return NextResponse.json(
         { error: "Payload exceeds maximum allowed flags limit of 100." },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -66,7 +81,7 @@ export async function POST(req: Request) {
     if (!paramValidation.valid || !paramValidation.params) {
       return NextResponse.json(
         { error: paramValidation.error || "Invalid brief parameters." },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -81,7 +96,7 @@ export async function POST(req: Request) {
       if (!validateApiKeyFormat(cleanHeaderKey)) {
         return NextResponse.json(
           { error: "Invalid API key format provided in x-gemini-api-key header." },
-          { status: 400 }
+          { status: 400, headers: corsHeaders }
         );
       }
       body.customApiKey = cleanHeaderKey;
@@ -110,7 +125,13 @@ export async function POST(req: Request) {
           fallbackModels: fallbackList,
         },
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
     );
   } catch (error) {
     console.error("Generate brief API error:", error);
@@ -120,7 +141,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(
       { error: safeMsg },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

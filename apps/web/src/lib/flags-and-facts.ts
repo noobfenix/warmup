@@ -105,8 +105,46 @@ export function detectDataFlags(rows: NormalizedRow[]): DataFlag[] {
     }
   };
 
+  // Pre-index columns to check once across the entire dataset to eliminate O(N * K) redundant lookups
+  const firstRow = rows[0];
+  const columnsToCheck: { standardKey: keyof typeof firstRow.values; displayHeader: string }[] = [];
+
+  if (firstRow) {
+    if (firstRow.mappedColumns && firstRow.mappedColumns.length > 0) {
+      for (const col of firstRow.mappedColumns) {
+        columnsToCheck.push({
+          standardKey: col.standardPollutant as keyof typeof firstRow.values,
+          displayHeader: col.sourceColumn,
+        });
+      }
+    } else {
+      const rawKeys = Object.keys(firstRow.rawValues);
+      const checkedKeys: (keyof typeof firstRow.values)[] = [
+        "PM2.5",
+        "PM10",
+        "NO2",
+        "SO2",
+        "CO",
+        "O3",
+        "AQI",
+      ];
+      for (const key of checkedKeys) {
+        const keyLower = key.toLowerCase();
+        const matchingRawHeader = rawKeys.find(
+          (h) => h === key || h.toLowerCase().includes(keyLower)
+        );
+        if (matchingRawHeader) {
+          columnsToCheck.push({
+            standardKey: key,
+            displayHeader: matchingRawHeader,
+          });
+        }
+      }
+    }
+  }
+
   for (const row of rows) {
-    const { sourceRowIndex, station, timestamp, values, rawValues, mappedColumns } = row;
+    const { sourceRowIndex, station, timestamp, values, rawValues } = row;
 
     // Check missing station
     if (!station || station.trim() === "" || station.startsWith("Station-")) {
@@ -139,41 +177,6 @@ export function detectDataFlags(rows: NormalizedRow[]): DataFlag[] {
         });
       } else {
         seenTimestamps.set(timeKey, sourceRowIndex);
-      }
-    }
-
-    // Determine which columns were monitored in this dataset
-    const columnsToCheck: { standardKey: keyof typeof values; displayHeader: string }[] = [];
-
-    if (mappedColumns && mappedColumns.length > 0) {
-      for (const col of mappedColumns) {
-        columnsToCheck.push({
-          standardKey: col.standardPollutant as keyof typeof values,
-          displayHeader: col.sourceColumn,
-        });
-      }
-    } else {
-      // Fallback for mock fixtures
-      const checkedKeys: (keyof typeof values)[] = [
-        "PM2.5",
-        "PM10",
-        "NO2",
-        "SO2",
-        "CO",
-        "O3",
-        "AQI",
-      ];
-      for (const key of checkedKeys) {
-        // Find matching header in rawValues
-        const matchingRawHeader = Object.keys(rawValues).find(
-          (h) => h === key || h.toLowerCase().includes(key.toLowerCase())
-        );
-        if (matchingRawHeader) {
-          columnsToCheck.push({
-            standardKey: key,
-            displayHeader: matchingRawHeader,
-          });
-        }
       }
     }
 
@@ -300,13 +303,17 @@ export function getFactEligibleRows(rows: NormalizedRow[], flags: DataFlag[]): N
  * Computes deterministic fact statements with IDs (F1..Fn).
  * Strictly groundable to source rows.
  */
-export function computeFacts(rows: NormalizedRow[], flags: DataFlag[]): ComputedFact[] {
+export function computeFacts(
+  rows: NormalizedRow[],
+  flags: DataFlag[],
+  precomputedEligibleRows?: NormalizedRow[]
+): ComputedFact[] {
   const facts: ComputedFact[] = [];
   let factCounter = 1;
 
   // Filter valid rows with AQI. Rows carrying an impossible or duplicate flag
   // stay visible in the flags panel but are excluded from computed facts.
-  const validAqiRows = getFactEligibleRows(rows, flags);
+  const validAqiRows = precomputedEligibleRows ?? getFactEligibleRows(rows, flags);
 
   if (validAqiRows.length === 0) {
     facts.push({
@@ -368,11 +375,24 @@ export function computeFacts(rows: NormalizedRow[], flags: DataFlag[]): Computed
     });
   }
 
-  // 3. Hotspot Fact (Max AQI)
-  const sortedByAqi = [...validAqiRows].sort(
-    (a, b) => (b.calculatedAqi || 0) - (a.calculatedAqi || 0)
-  );
-  const peakRow = sortedByAqi[0];
+  // 3. Hotspot Fact (Max AQI) & 4. Cleanest Zone Fact (Min AQI) - Single pass O(N)
+  let peakRow = validAqiRows[0];
+  let cleanestRow = validAqiRows[0];
+
+  for (let i = 1; i < validAqiRows.length; i++) {
+    const row = validAqiRows[i];
+    const rowAqi = row.calculatedAqi ?? -1;
+    const peakAqi = peakRow.calculatedAqi ?? -1;
+    const cleanestAqi = cleanestRow.calculatedAqi ?? Infinity;
+
+    if (rowAqi > peakAqi) {
+      peakRow = row;
+    }
+    if (rowAqi < cleanestAqi) {
+      cleanestRow = row;
+    }
+  }
+
   const peakCategory = getAqiCategory(peakRow.calculatedAqi!);
 
   facts.push({
@@ -391,7 +411,6 @@ export function computeFacts(rows: NormalizedRow[], flags: DataFlag[]): Computed
   });
 
   // 4. Cleanest Zone Fact (Min AQI)
-  const cleanestRow = sortedByAqi[sortedByAqi.length - 1];
   const cleanestCategory = getAqiCategory(cleanestRow.calculatedAqi!);
 
   facts.push({
@@ -497,19 +516,35 @@ export function computeFacts(rows: NormalizedRow[], flags: DataFlag[]): Computed
  */
 export function analyzeAirQualityData(rows: NormalizedRow[]): AnalysisOutput {
   const flags = detectDataFlags(rows);
-  const facts = computeFacts(rows, flags);
-
   const validAqiRows = getFactEligibleRows(rows, flags);
+  const facts = computeFacts(rows, flags, validAqiRows);
+
   const aqiSum = validAqiRows.reduce((sum, r) => sum + (r.calculatedAqi || 0), 0);
   const overallAvg =
     validAqiRows.length > 0 ? Math.round((aqiSum / validAqiRows.length) * 10) / 10 : null;
   const overallCat = overallAvg !== null ? getAqiCategory(overallAvg).name : null;
 
-  const sorted = [...validAqiRows].sort(
-    (a, b) => (b.calculatedAqi || 0) - (a.calculatedAqi || 0)
-  );
-  const peak = sorted[0];
-  const cleanest = sorted[sorted.length - 1];
+  let peak: NormalizedRow | undefined;
+  let cleanest: NormalizedRow | undefined;
+
+  if (validAqiRows.length > 0) {
+    peak = validAqiRows[0];
+    cleanest = validAqiRows[0];
+
+    for (let i = 1; i < validAqiRows.length; i++) {
+      const row = validAqiRows[i];
+      const rowAqi = row.calculatedAqi ?? -1;
+      const peakAqi = peak?.calculatedAqi ?? -1;
+      const cleanestAqi = cleanest?.calculatedAqi ?? Infinity;
+
+      if (rowAqi > peakAqi) {
+        peak = row;
+      }
+      if (rowAqi < cleanestAqi) {
+        cleanest = row;
+      }
+    }
+  }
 
   const flaggedRowsSet = new Set(flags.map((f) => f.sourceRowIndex));
 

@@ -61,6 +61,16 @@ export interface ValidationEnforcementResult {
   passedAuditing: boolean;
 }
 
+export interface BriefAuditInfo {
+  groundingScore: number;
+  passedAuditing: boolean;
+  rejectedFindingsCount: number;
+  rejectedFindings?: RejectedFindingRecord[];
+  allCitedFactIds?: string[];
+  modelUsed?: string;
+  fallbackModels?: string[];
+}
+
 /**
  * Validates brief findings against computed Fact IDs.
  * Strictly REJECTS findings that cite unknown or hallucinatory Fact IDs.

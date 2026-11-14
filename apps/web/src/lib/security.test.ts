@@ -118,4 +118,24 @@ describe("Security & Vulnerability Defense Suite", () => {
       expect(validateApiKeyFormat("key\nwith\nnewlines")).toBe(false);
     });
   });
+
+  describe("getClientIp & CORS Hardening", () => {
+    it("safely extracts and validates legitimate IPv4 and IPv6", () => {
+      const req1 = new Request("http://localhost/api/test", {
+        headers: { "x-forwarded-for": "203.0.113.195, 198.51.100.1" },
+      });
+      expect(getClientIp(req1)).toBe("203.0.113.195");
+
+      const req2 = new Request("http://localhost/api/test", {
+        headers: { "x-real-ip": "198.51.100.55" },
+      });
+      expect(getClientIp(req2)).toBe("198.51.100.55");
+
+      // Rejects spoofed non-IP strings and falls back to safe loopback
+      const req3 = new Request("http://localhost/api/test", {
+        headers: { "x-forwarded-for": "malicious<script>alert(1)</script>" },
+      });
+      expect(getClientIp(req3)).toBe("127.0.0.1");
+    });
+  });
 });

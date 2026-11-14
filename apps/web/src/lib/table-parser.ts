@@ -27,6 +27,8 @@ export interface NormalizedRow {
     sourceColumn: string;
     standardPollutant: StandardPollutant | "AQI";
   }[];
+  isOfficialNaqi?: boolean;
+  naqiCriteriaNote?: string;
 }
 
 export interface ParsedRawTable {
@@ -298,6 +300,8 @@ export function normalizeTableData(
       cpcbCategory: categoryInfo ? categoryInfo.name : null,
       rawValues: row,
       mappedColumns: activeMappedColumns,
+      isOfficialNaqi: aqiCalc.isOfficialNaqi,
+      naqiCriteriaNote: aqiCalc.criteriaNote,
     });
   });
 

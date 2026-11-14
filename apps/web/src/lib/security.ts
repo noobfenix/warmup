@@ -113,17 +113,60 @@ export const apiRateLimiter = new InMemoryRateLimiter({
 export const DEFAULT_MAX_BODY_BYTES = 100 * 1024; // 100 KB limit for standard payloads
 export const BRIEF_MAX_BODY_BYTES = 250 * 1024; // 250 KB limit for brief generation
 
+const IPV4_REGEX = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+const IPV6_REGEX = /^[0-9a-fA-F:]+$/;
+
+export function isValidIp(ip: string): boolean {
+  if (!ip || ip.length > 45) return false;
+  return IPV4_REGEX.test(ip) || IPV6_REGEX.test(ip);
+}
+
 export function getClientIp(req: Request): string {
+  const realIp = req.headers.get("x-real-ip")?.trim();
+  if (realIp && isValidIp(realIp)) {
+    return realIp;
+  }
+
   const forwardedFor = req.headers.get("x-forwarded-for");
   if (forwardedFor) {
-    const ip = forwardedFor.split(",")[0].trim();
-    if (ip) return ip.slice(0, 64);
+    const ips = forwardedFor.split(",").map((s) => s.trim()).filter(Boolean);
+    for (const ip of ips) {
+      if (isValidIp(ip)) {
+        return ip;
+      }
+    }
   }
-  const realIp = req.headers.get("x-real-ip");
-  if (realIp) {
-    return realIp.trim().slice(0, 64);
-  }
+
   return "127.0.0.1";
+}
+
+/**
+ * Generates restricted CORS headers validated against trusted origins.
+ * Eliminates wildcard exposure on sensitive API endpoints.
+ */
+export function getCorsHeaders(
+  req: Request,
+  allowedMethods: string = "POST, OPTIONS"
+): Record<string, string> {
+  const origin = req.headers.get("origin") || "";
+  const host = req.headers.get("host") || "";
+
+  // Same-origin, loopback, or host-matching origin authorization
+  const isAllowed =
+    !origin ||
+    origin.includes("localhost") ||
+    origin.includes("127.0.0.1") ||
+    (Boolean(host) && origin.includes(host)) ||
+    (Boolean(process.env.ALLOWED_ORIGINS) &&
+      process.env.ALLOWED_ORIGINS!.split(",").map((o) => o.trim()).includes(origin));
+
+  return {
+    "Access-Control-Allow-Origin": isAllowed ? (origin || "*") : "null",
+    "Access-Control-Allow-Methods": allowedMethods,
+    "Access-Control-Allow-Headers": "Content-Type, x-gemini-api-key",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin, Accept-Encoding, x-gemini-api-key",
+  };
 }
 
 export async function parseJsonWithLimit<T = unknown>(

@@ -31,15 +31,15 @@ export function describeDataset(stats: DatasetStats | null): Pick<SampleCardMeta
 const STYLE_BY_ID: Record<string, Pick<SampleCardMeta, "icon" | "badgeColor">> = {
   "delhi-ward": {
     icon: <Building2 className="h-5 w-5 text-blue-500" aria-hidden="true" />,
-    badgeColor: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+    badgeColor: "bg-rose-500/10 text-rose-800 dark:text-rose-400 border-rose-500/20",
   },
   "bengaluru-society": {
     icon: <Home className="h-5 w-5 text-emerald-500" aria-hidden="true" />,
-    badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+    badgeColor: "bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border-emerald-500/20",
   },
   "mumbai-schools": {
     icon: <School className="h-5 w-5 text-amber-500" aria-hidden="true" />,
-    badgeColor: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    badgeColor: "bg-amber-500/10 text-amber-900 dark:text-amber-400 border-amber-500/20",
   },
 };
 
@@ -82,18 +82,13 @@ export function SampleButtons({ onSelectSample, selectedSampleId }: SampleButton
           const meta = SAMPLE_META[sample.id];
 
           return (
-            <div
+            <button
               key={sample.id}
+              type="button"
               onClick={() => onSelectSample(sample)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onSelectSample(sample);
-                }
-              }}
-              className={`group flex items-start justify-between gap-4 p-4 rounded-xl border transition-all cursor-pointer text-left ${
+              aria-pressed={isSelected}
+              aria-label={`Load dataset: ${getCleanName(sample.name)}. ${sample.description}`}
+              className={`w-full group flex items-start justify-between gap-4 p-4 rounded-xl border transition-all cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-primary ${
                 isSelected
                   ? "bg-card border-primary ring-1 ring-primary shadow-sm"
                   : "bg-card hover:bg-muted/50 border-border hover:border-border/80"
@@ -137,7 +132,7 @@ export function SampleButtons({ onSelectSample, selectedSampleId }: SampleButton
                   </span>
                 )}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
