@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateCivicBrief, type GenerateBriefRequest } from "@/lib/gemini-brief.server";
+import { getFallbackModels } from "@/lib/gemini.server";
 import {
   apiRateLimiter,
   getClientIp,
@@ -88,11 +89,8 @@ export async function POST(req: Request) {
 
     const auditedResult = await generateCivicBrief(body);
 
-    const activeModel = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
-    const fallbackList = (process.env.GEMINI_FALLBACK_MODELS || "")
-      .split(",")
-      .map((m) => m.trim())
-      .filter(Boolean);
+    const activeModel = auditedResult.modelUsed;
+    const fallbackList = getFallbackModels();
 
     return NextResponse.json(
       {

@@ -62,12 +62,13 @@ export function TableViewer({ rows, highlightedRowIndices = [], onSelectRow }: T
         <div className="flex items-center gap-2">
           {/* Quick Filter */}
           <div className="relative">
-            <Search className="h-3 w-3 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <Search className="h-3 w-3 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" aria-hidden="true" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Filter stations..."
+              aria-label="Filter stations or pollutants"
               className="text-xs pl-7 pr-2.5 py-1 rounded-md bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary w-32 sm:w-40"
             />
           </div>
@@ -75,9 +76,10 @@ export function TableViewer({ rows, highlightedRowIndices = [], onSelectRow }: T
           <button
             type="button"
             onClick={() => setShowRaw(!showRaw)}
+            aria-label={showRaw ? "Switch to normalized data view" : "Switch to raw data view"}
             className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-background border border-border cursor-pointer transition shadow-xs"
           >
-            <Layers className="h-3 w-3" />
+            <Layers className="h-3 w-3" aria-hidden="true" />
             <span>{showRaw ? "Normalized Data" : "Raw Data"}</span>
           </button>
         </div>
@@ -85,17 +87,18 @@ export function TableViewer({ rows, highlightedRowIndices = [], onSelectRow }: T
 
       {/* Table */}
       <div className="overflow-x-auto max-h-80">
-        <table className="w-full text-xs text-left border-collapse">
+        <table className="w-full text-xs text-left border-collapse" aria-label="Audited Telemetry Registry">
+          <caption className="sr-only">Audited air quality telemetry table records and CPCB statuses</caption>
           <thead className="bg-muted/80 text-muted-foreground font-mono text-[11px] uppercase tracking-wider border-b border-border sticky top-0 z-10 backdrop-blur-md">
             <tr>
-              <th className="p-3 pl-4">#</th>
-              <th className="p-3">Station / Location</th>
-              <th className="p-3">Timestamp</th>
-              <th className="p-3 font-mono text-right">PM2.5</th>
-              <th className="p-3 font-mono text-right">PM10</th>
-              <th className="p-3 font-mono text-right">NO2</th>
-              <th className="p-3 font-mono text-right">AQI</th>
-              <th className="p-3 pr-4">CPCB Status</th>
+              <th scope="col" className="p-3 pl-4">#</th>
+              <th scope="col" className="p-3">Station / Location</th>
+              <th scope="col" className="p-3">Timestamp</th>
+              <th scope="col" className="p-3 font-mono text-right">PM2.5</th>
+              <th scope="col" className="p-3 font-mono text-right">PM10</th>
+              <th scope="col" className="p-3 font-mono text-right">NO2</th>
+              <th scope="col" className="p-3 font-mono text-right">AQI</th>
+              <th scope="col" className="p-3 pr-4">CPCB Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -104,8 +107,17 @@ export function TableViewer({ rows, highlightedRowIndices = [], onSelectRow }: T
               return (
                 <tr
                   key={row.sourceRowIndex}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Select row ${row.sourceRowIndex} for ${row.station}`}
                   onClick={() => onSelectRow && onSelectRow(row.sourceRowIndex)}
-                  className={`transition-colors cursor-pointer ${
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelectRow && onSelectRow(row.sourceRowIndex);
+                    }
+                  }}
+                  className={`transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                     isHighlighted
                       ? "bg-primary/15 font-medium ring-1 ring-inset ring-primary/40"
                       : "bg-card hover:bg-muted/30"

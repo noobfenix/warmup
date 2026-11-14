@@ -232,3 +232,22 @@ export function validateBriefParameters(params: {
     params: { audience, language, readingLevel },
   };
 }
+
+/**
+ * Sanitizes CSV cell content against CSV/Formula Injection (DDE injection).
+ * If an untrusted string begins with =, +, -, @, \t, or \r, prefixes it with a single quote
+ * unless it is purely a standard signed numeric literal (e.g., -15.5 or +2).
+ */
+export function sanitizeCsvCell(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+  if (/^[=+\-@\t\r]/.test(str)) {
+    const trimmed = str.trim();
+    // Pure signed numeric values like -12 or +45.2 are safe mathematical numbers
+    if (/^[+\-]\d+(\.\d+)?$/.test(trimmed)) {
+      return trimmed;
+    }
+    return `'${str}`;
+  }
+  return str.trim();
+}

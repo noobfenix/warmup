@@ -33,6 +33,16 @@ const AUDIENCE_NAMES: Record<AllowedAudience, string> = {
   school: "School Principals, Physical Education Teachers & Parents",
 };
 
+// Concrete levers each audience controls, so prioritized actions differ by audience.
+export const AUDIENCE_ACTION_FOCUS: Record<AllowedAudience, string> = {
+  ward_officer:
+    "Municipal levers only: road dust suppression (water sprinkling, mechanical sweeping), construction and demolition site checks, waste-burning enforcement, traffic diversion at hotspot stations, sensor maintenance tickets for flagged rows, and public announcements.",
+  housing_society:
+    "Society-committee levers only: diesel generator scheduling and servicing, gate and parking traffic, basement ventilation, closing or opening common areas and play areas, resident notices on WhatsApp or notice boards, and requesting sensor checks from the vendor.",
+  school:
+    "School levers only: moving morning assembly and physical education indoors, adjusting arrival and dismissal times, bus idling rules at the gate, classroom ventilation and air purifiers, parent communication, and reporting faulty campus sensors.",
+};
+
 const LANGUAGE_NAMES: Record<AllowedLanguage, string> = {
   en: "English",
   hi: "Hindi (हिंदी)",
@@ -133,7 +143,7 @@ export const CIVIC_BRIEF_JSON_SCHEMA = {
 /**
  * Builds the strict grounded system instruction and user prompt for Gemini with defensive sanitization.
  */
-function buildBriefPrompt(req: GenerateBriefRequest): { systemInstruction: string; prompt: string } {
+export function buildBriefPrompt(req: GenerateBriefRequest): { systemInstruction: string; prompt: string } {
   // Use strictly mapped dictionaries to prevent prompt injection via unvalidated parameters
   const audienceLabel = AUDIENCE_NAMES[req.audience] || AUDIENCE_NAMES.ward_officer;
   const langLabel = LANGUAGE_NAMES[req.language] || LANGUAGE_NAMES.en;
@@ -146,7 +156,7 @@ CRITICAL INVARIANTS & ETHICAL GUARDRAILS:
 1. ZERO HALLUCINATION: You must NEVER invent numbers, locations, dates, or measurements. You may ONLY state findings that directly cite the provided Fact IDs (e.g. ["F1"], ["F2"]).
 2. STRICT FACT CITATION: Every item in "findings" MUST include "factIds" referencing existing Fact IDs from the provided facts table. Citing an unknown Fact ID will cause immediate rejection by our automated auditing pipeline.
 3. ABSOLUTELY NO MEDICAL ADVICE: You must NEVER give medical diagnoses, drug prescriptions, dosage instructions, or clinical treatment advice. Formulate public health guidance strictly in terms of civic operational advisories (e.g. stay indoors, wear particulate filter masks such as N95, run HEPA air purifiers, seal windows, postpone vigorous physical exertion, and advise citizens with symptoms to consult certified physicians).
-4. AUDIENCE SPECIALIZATION: Tailor prioritized actions and internal briefing note specifically for ${audienceLabel}.
+4. AUDIENCE SPECIALIZATION: Tailor prioritized actions and internal briefing note specifically for ${audienceLabel}. ${AUDIENCE_ACTION_FOCUS[req.audience] || AUDIENCE_ACTION_FOCUS.ward_officer} Do not propose actions this audience cannot carry out.
 5. LINGUISTIC LOCALIZATION: Output all textual content in ${langLabel}.
 6. READING LEVEL: Follow the reading level tone: ${readingLevelGuide}.
 7. SENSITIVE ADVISORIES: Provide explicit citizen guidance partitioned for:
@@ -234,9 +244,14 @@ Generate the structured civic air quality briefing JSON object following the req
  * Orchestrates live brief generation with Gemini,
  * schema enforcement, and strict Fact ID grounding validation.
  */
+export interface GeneratedCivicBrief extends ValidationEnforcementResult {
+  /** The Gemini model that actually produced the brief (may be a fallback). */
+  modelUsed: string;
+}
+
 export async function generateCivicBrief(
   req: GenerateBriefRequest
-): Promise<ValidationEnforcementResult> {
+): Promise<GeneratedCivicBrief> {
   const apiKey = req.customApiKey || process.env.GEMINI_API_KEY;
 
   if (!apiKey || apiKey === "your_gemini_api_key_here") {
@@ -252,22 +267,19 @@ export async function generateCivicBrief(
   const { systemInstruction, prompt } = buildBriefPrompt(req);
   const client = createGeminiClient(apiKey);
 
-  const rawBrief = await generateJsonWithGemini<CivicBriefResponse>(
+  const { data: parsedBrief, model } = await generateJsonWithGemini<CivicBriefResponse>(
     {
       prompt,
       systemInstruction,
       responseSchema: CIVIC_BRIEF_JSON_SCHEMA,
       temperature: 0.1, // low temperature for rigorous factual adherence
       timeoutMs: 25000,
+      // Strict Zod schema enforcement; a malformed answer triggers the next fallback model.
+      parse: (raw) => CivicBriefResponseSchema.parse(raw),
     },
     client
   );
 
-  // Strictly enforce response schema via Zod
-  const parsedBrief = CivicBriefResponseSchema.parse(rawBrief);
-
   // Validate and reject findings citing unknown fact IDs
-  const audited = validateAndEnforceFactIds(parsedBrief, req.facts);
-
-  return audited;
+  return { ...validateAndEnforceFactIds(parsedBrief, req.facts), modelUsed: model };
 }

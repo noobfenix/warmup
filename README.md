@@ -1,6 +1,8 @@
 # Civic Air Quality Briefing Studio
 
-An accountable, domain-grounded Next.js platform that ingests raw ambient air quality tables, extracts auditable mathematical facts and sensor flags in deterministic code, and synthesizes audience-targeted civic briefings using server-side Gemini 2.5 with verified fact-grounding enforcement.
+An accountable, domain-grounded Next.js platform that ingests raw ambient air quality tables, extracts auditable mathematical facts and sensor flags in deterministic code, and synthesizes audience-targeted civic briefings with a live server-side Gemini call whose every finding is checked against the computed Fact IDs.
+
+**For evaluators:** no login is needed. Open the app, click a sample dataset (the Mumbai one contains stuck, missing and negative readings), pick an audience, language and reading level, and press **Generate Civic Briefing**. Click any `F#` badge to see the exact source rows behind it. Generate a second time with a different dataset to see the comparison with the previous brief.
 
 ---
 
@@ -29,7 +31,7 @@ flowchart TD
 1. **Table Ingestion & Mapping**:
    - Accepts CSV, TSV, DSV, or JSON data.
    - Users can choose from 3 pre-verified sample datasets (Delhi Ward Sensor Network, Bengaluru Housing Society, Mumbai School District Anomaly Data).
-   - `/api/air-quality/map-columns` employs Gemini 2.5 Flash to map non-standard column headers and units to standardized pollutant parameters (with deterministic heuristic fallback).
+   - The studio maps column headers and units in the browser with a deterministic heuristic (`heuristicMapColumns`: station/time/PM2.5/PM10/NO2/SO2/CO/O3/AQI, ppb/ppm conversion). A Gemini-assisted mapping endpoint exists at `/api/air-quality/map-columns`, but the studio UI does not call it yet.
 2. **Deterministic Code Normalization & CPCB AQI**:
    - Calculates CPCB sub-indices for PM2.5, PM10, NO2, SO2, CO, and O3 using official linear interpolation formulas.
    - Determines overall AQI ($AQI = \max(I_p)$) and categorizes into CPCB NAQI bands: *Good, Satisfactory, Moderate, Poor, Very Poor, Severe*.
@@ -39,16 +41,17 @@ flowchart TD
      - `impossible`: Negative concentrations ($< 0$) or physically implausible readings (e.g. PM2.5 $> 1500\ \mu g/m^3$, AQI $> 1000$).
      - `duplicate`: Repeated timestamps for identical stations.
      - `stuck_value`: Frozen sensor transducers reporting identical non-zero values across $\ge 3$ consecutive cycles.
-   - **Invariant: Flagged data is NEVER hidden.** Surfaced in a dedicated high-contrast Flags Audit Panel.
+   - **Invariant: Flagged data is NEVER hidden.** Surfaced in a dedicated high-contrast Flags Audit Panel and in the telemetry table.
+   - **Rows with an `impossible` or `duplicate` flag are excluded from computed facts** (averages, hotspots, exceedances, trends) so a broken sensor cannot become a "hotspot". Missing and stuck readings stay in the facts and are reported in the data-integrity fact.
 4. **Verifiable Facts Engine (`F1`..`Fn`)**:
    - Generates numbered Fact IDs (`F1`, `F2`, ...) with 1-based source row references:
      - Regional and station-wise averages
      - Peak pollution hotspots and cleanest zones
      - CPCB 24-hr standard exceedance counts
-     - Chronological trends and delta percentages
+     - Per-station trends (first vs last reading at the same station; never compared across stations)
      - Telemetry integrity ratios
 5. **Audience Configuration & Generation**:
-   - **Audience**: *Ward Officer & Municipal Administration*, *Housing Society Committee & Residents*, *School Principals & Teachers*.
+   - **Audience**: *Ward Officer & Municipal Administration*, *Housing Society Committee & Residents*, *School Principals & Teachers*. Each audience is given its own set of action levers in the prompt (`AUDIENCE_ACTION_FOCUS`), e.g. dust suppression and enforcement for wards, generator scheduling for societies, indoor assembly and PE for schools. Changing a parameter after generating shows a "Regenerate" banner so a stale brief is never mistaken for the new selection.
    - **Languages**: *English*, *Hindi (हिंदी)*, *Marathi (मराठी)*, *Tamil (தமிழ்)*.
    - **Reading Levels**: *Executive* (action-oriented bullet points), *Standard* (balanced civic rationale), *Accessible* (plain language for citizens).
 6. **Server-Side Briefing Generation & Fact ID Enforcement**:
@@ -132,10 +135,17 @@ npm run test
    - Anomaly detection: `missing` values, `impossible` negative readings, `duplicate` timestamps, and `stuck_value` frozen sensors.
    - Fact generation: averages, hotspots, cleanest zones, CPCB standard exceedances.
    - Traceable source row mapping.
-4. **`brief-validator.test.ts`**:
+4. **`messy-data.test.ts`**:
+   - Semicolon-delimited input with quoted commas, unicode units, `NA`/`--`/blank cells, ppb conversion.
+   - Every flag type with exact source rows; impossible/duplicate rows excluded from facts.
+   - Trend facts never mix stations; every fact cites existing rows and IDs run `F1..Fn`.
+5. **`gemini-brief.test.ts`**:
+   - Each audience produces different action instructions; language and reading level switch the prompt.
+   - Every fact ID and flag row reaches the prompt; newlines in data cannot inject instructions.
+6. **`brief-validator.test.ts`**:
    - Strict rejection of findings citing unknown or hallucinated Fact IDs (`F99`).
    - Clean citation pass-through and grounding score calculation.
-5. **`diff-engine.test.ts`**:
+7. **`diff-engine.test.ts`**:
    - Quantified delta computation (average AQI, category transition, hotspot movements, flag deltas).
    - First-run baseline handling and chronological narrative generation.
 
@@ -158,7 +168,7 @@ NODE_ENV=development
 ```
 - **Primary Model**: Uses `GEMINI_MODEL` (e.g. `gemini-3.5-flash-lite`).
 - **Resilient Fallback Chain**: If the primary model encounters rate limits or errors, it automatically falls back sequentially across `GEMINI_FALLBACK_MODELS` (`gemini-3.1-flash-lite`, `gemini-3.6-flash`, `gemini-2.5-flash`).
-- **Active Model Reflection**: The active model and fallback chain are rendered in the UI brief header.
+- **Active Model Reflection**: The model that actually answered is shown in the brief header when the server returns it.
 
 ### 3. Run Development Server
 ```bash

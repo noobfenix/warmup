@@ -106,7 +106,7 @@ export async function POST(req: Request) {
           sampleRows.slice(0, 3)
         )}`;
 
-        const geminiResult = await generateJsonWithGemini<ColumnUnitMappingResult>({
+        const { data: geminiResult } = await generateJsonWithGemini<ColumnUnitMappingResult>({
           prompt: userPrompt,
           systemInstruction: COLUMN_MAPPING_PROMPT_SYSTEM,
           temperature: 0.1,

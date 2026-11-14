@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Wind, ShieldCheck, Activity, Cpu } from "lucide-react";
+import { Wind, ShieldCheck, Cpu } from "lucide-react";
 
 export default function Header() {
   return (
@@ -27,17 +27,11 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Operational Indicators */}
+        {/* Operational Indicators: describe what the app does, not unverified results */}
         <div className="flex items-center gap-2.5 text-xs">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-muted border border-border text-foreground font-medium text-xs">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="hidden sm:inline text-muted-foreground">Audit Engine:</span>
-            <span>100% Grounded</span>
-          </div>
-
-          <div className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-muted border border-border text-muted-foreground text-xs font-medium">
-            <Cpu className="h-3.5 w-3.5 text-primary" />
-            <span>Gemini 2.5 Flash</span>
+            <Cpu className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+            <span>Fact-ID audit on every brief</span>
           </div>
         </div>
       </div>

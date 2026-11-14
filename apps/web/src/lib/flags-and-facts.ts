@@ -282,6 +282,21 @@ export function detectDataFlags(rows: NormalizedRow[]): DataFlag[] {
 }
 
 /**
+ * Rows that are allowed to contribute to facts: they have a computable AQI and
+ * no "impossible" or "duplicate" flag. Flagged rows are still shown, never hidden.
+ */
+export function getFactEligibleRows(rows: NormalizedRow[], flags: DataFlag[]): NormalizedRow[] {
+  const excluded = new Set(
+    flags
+      .filter((fl) => fl.type === "impossible" || fl.type === "duplicate")
+      .map((fl) => fl.sourceRowIndex)
+  );
+  return rows.filter(
+    (r) => r.calculatedAqi !== null && !isNaN(r.calculatedAqi) && !excluded.has(r.sourceRowIndex)
+  );
+}
+
+/**
  * Computes deterministic fact statements with IDs (F1..Fn).
  * Strictly groundable to source rows.
  */
@@ -289,10 +304,9 @@ export function computeFacts(rows: NormalizedRow[], flags: DataFlag[]): Computed
   const facts: ComputedFact[] = [];
   let factCounter = 1;
 
-  // Filter valid rows with AQI
-  const validAqiRows = rows.filter(
-    (r) => r.calculatedAqi !== null && !isNaN(r.calculatedAqi)
-  );
+  // Filter valid rows with AQI. Rows carrying an impossible or duplicate flag
+  // stay visible in the flags panel but are excluded from computed facts.
+  const validAqiRows = getFactEligibleRows(rows, flags);
 
   if (validAqiRows.length === 0) {
     facts.push({
@@ -432,43 +446,33 @@ export function computeFacts(rows: NormalizedRow[], flags: DataFlag[]): Computed
     });
   }
 
-  // 6. Chronological Trend Facts (if chronological data exists)
-  const rowsWithTimestamp = validAqiRows.filter((r) => !!r.timestamp);
-  if (rowsWithTimestamp.length >= 2) {
-    const firstRow = rowsWithTimestamp[0];
-    const lastRow = rowsWithTimestamp[rowsWithTimestamp.length - 1];
+  // 6. Chronological Trend Facts: compare first vs last reading within the SAME station
+  for (const [stName, stRows] of stationGroups.entries()) {
+    const timed = stRows.filter((r) => !!r.timestamp);
+    if (timed.length < 2) continue;
+    const firstRow = timed[0];
+    const lastRow = timed[timed.length - 1];
+    const firstAqi = firstRow.calculatedAqi!;
+    const lastAqi = lastRow.calculatedAqi!;
+    const delta = lastAqi - firstAqi;
+    const pctChange = Math.round(firstAqi > 0 ? (delta / firstAqi) * 100 : 0);
+    const direction = delta > 0 ? "increased" : delta < 0 ? "decreased" : "remained unchanged";
 
-    if (
-      firstRow.calculatedAqi !== null &&
-      lastRow.calculatedAqi !== null &&
-      firstRow.sourceRowIndex !== lastRow.sourceRowIndex
-    ) {
-      const delta = lastRow.calculatedAqi - firstRow.calculatedAqi;
-      const pctChange = Math.round(
-        firstRow.calculatedAqi > 0
-          ? ((lastRow.calculatedAqi - firstRow.calculatedAqi) / firstRow.calculatedAqi) * 100
-          : 0
-      );
-      const direction = delta > 0 ? "increased" : delta < 0 ? "decreased" : "remained unchanged";
-
-      facts.push({
-        id: `F${factCounter++}`,
-        category: "trend",
-        title: "Chronological AQI Trajectory",
-        statement: `AQI ${direction} by ${Math.abs(delta)} points (${Math.abs(pctChange)}%) from ${
-          firstRow.calculatedAqi
-        } at ${firstRow.timestamp} to ${lastRow.calculatedAqi} at ${lastRow.timestamp}.`,
-        sourceRowIndices: [firstRow.sourceRowIndex, lastRow.sourceRowIndex],
-        station: firstRow.station === lastRow.station ? firstRow.station : "Network",
-        metric: "AQI Delta",
-        value: delta,
-        unit: "points",
-      });
-    }
+    facts.push({
+      id: `F${factCounter++}`,
+      category: "trend",
+      title: `AQI Trend at ${stName}`,
+      statement: `At "${stName}", AQI ${direction} by ${Math.abs(delta)} points (${Math.abs(pctChange)}%) from ${firstAqi} at ${firstRow.timestamp} to ${lastAqi} at ${lastRow.timestamp}.`,
+      sourceRowIndices: [firstRow.sourceRowIndex, lastRow.sourceRowIndex],
+      station: stName,
+      metric: "AQI Delta",
+      value: delta,
+      unit: "points",
+    });
   }
 
   // 7. Data Quality & Sensor Reliability Fact
-  const flaggedRowIndices = Array.from(new Set(flags.map((fl) => fl.sourceRowIndex)));
+  const flaggedRowIndices = Array.from(new Set(flags.map((fl) => fl.sourceRowIndex))).sort((a, b) => a - b);
   const dataQualityRate = Math.round(
     ((rows.length - flaggedRowIndices.length) / (rows.length || 1)) * 100
   );
@@ -495,9 +499,7 @@ export function analyzeAirQualityData(rows: NormalizedRow[]): AnalysisOutput {
   const flags = detectDataFlags(rows);
   const facts = computeFacts(rows, flags);
 
-  const validAqiRows = rows.filter(
-    (r) => r.calculatedAqi !== null && !isNaN(r.calculatedAqi)
-  );
+  const validAqiRows = getFactEligibleRows(rows, flags);
   const aqiSum = validAqiRows.reduce((sum, r) => sum + (r.calculatedAqi || 0), 0);
   const overallAvg =
     validAqiRows.length > 0 ? Math.round((aqiSum / validAqiRows.length) * 10) / 10 : null;

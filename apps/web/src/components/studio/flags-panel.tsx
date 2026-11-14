@@ -72,7 +72,9 @@ export function FlagsPanel({ flags, onSelectRow }: FlagsPanelProps) {
         <button
           type="button"
           onClick={() => setIsExpanded(!isExpanded)}
-          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer transition"
+          aria-expanded={isExpanded}
+          aria-label={isExpanded ? "Collapse sensor flags panel" : "Expand sensor flags panel"}
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer transition focus:outline-none focus:ring-1 focus:ring-primary rounded px-1.5 py-0.5"
         >
           {isExpanded ? (
             <>

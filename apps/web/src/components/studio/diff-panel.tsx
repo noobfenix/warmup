@@ -72,7 +72,7 @@ export function DiffPanel({ diff, narrative, onClearHistory }: DiffPanelProps) {
               Chronological Telemetry Delta
             </h3>
             <span className="text-xs text-muted-foreground">
-              Deterministic code diff narrated by Gemini
+              {narrative ? "Code-computed deltas, narrated by Gemini" : "Code-computed deltas (rule-based summary)"}
             </span>
           </div>
         </div>

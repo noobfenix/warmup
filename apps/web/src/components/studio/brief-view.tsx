@@ -24,6 +24,7 @@ interface BriefViewProps {
   brief: CivicBriefResponse;
   facts: ComputedFact[];
   onSelectFact: (factId: string) => void;
+  lang?: string;
   auditInfo?: {
     groundingScore: number;
     passedAuditing: boolean;
@@ -32,7 +33,7 @@ interface BriefViewProps {
   };
 }
 
-export function BriefView({ brief, facts, onSelectFact, auditInfo }: BriefViewProps) {
+export function BriefView({ brief, facts, onSelectFact, auditInfo, lang = "en" }: BriefViewProps) {
   const [copiedNote, setCopiedNote] = useState<boolean>(false);
   const [copiedFull, setCopiedFull] = useState<boolean>(false);
   const [copiedMarkdown, setCopiedMarkdown] = useState<boolean>(false);
@@ -55,7 +56,7 @@ export function BriefView({ brief, facts, onSelectFact, auditInfo }: BriefViewPr
     return `# OFFICIAL CIVIC AIR QUALITY BRIEFING
 **Audience**: ${brief.audience.replace("_", " ").toUpperCase()}
 **Language**: ${brief.language.toUpperCase()} | **Tone**: ${brief.readingLevel.toUpperCase()}
-**Model**: ${brief.modelUsed || "Gemini 2.5 Flash"}
+**Model**: ${brief.modelUsed || "Gemini"}
 
 ## Executive Summary
 ${brief.executiveSummary}
@@ -124,7 +125,7 @@ ${brief.internalBriefingNote}
   };
 
   return (
-    <article className="rounded-xl border border-border bg-card shadow-xs overflow-hidden space-y-6 pb-6">
+    <article lang={lang} className="rounded-xl border border-border bg-card shadow-xs overflow-hidden space-y-6 pb-6">
       {/* Header Bar */}
       <div className="border-b border-border bg-muted/30 p-6 sm:p-7 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -183,21 +184,38 @@ ${brief.internalBriefingNote}
           </div>
         </div>
 
-        {/* Fact Grounding Seal */}
-        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 flex items-center justify-between text-xs flex-wrap gap-2">
-          <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400 font-medium">
-            <Award className="h-4 w-4 shrink-0" />
-            <span>Deterministic Grounding Verification: 100% Proven</span>
-            <span className="text-muted-foreground text-xs hidden lg:inline">
-              (All cited facts strictly audited against telemetry rows; 0 hallucinations)
-            </span>
-          </div>
-          {auditInfo && auditInfo.rejectedFindingsCount > 0 && (
-            <span className="text-rose-500 font-mono text-xs font-bold">
-              Rejected {auditInfo.rejectedFindingsCount} findings with unverified Fact IDs
-            </span>
-          )}
-        </div>
+        {/* Fact Grounding Seal: reflects the server audit result, never a fixed claim */}
+        {(() => {
+          const score = auditInfo?.groundingScore;
+          const rejected = auditInfo?.rejectedFindingsCount ?? 0;
+          const passed = auditInfo ? auditInfo.passedAuditing && rejected === 0 : null;
+          const tone =
+            passed === null
+              ? "bg-muted border-border text-muted-foreground"
+              : passed
+              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400"
+              : "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400";
+          return (
+            <div
+              role="status"
+              className={`rounded-lg border p-3 flex items-center justify-between text-xs flex-wrap gap-2 font-medium ${tone}`}
+            >
+              <div className="flex items-center gap-2.5">
+                {passed === false ? <ShieldAlert className="h-4 w-4 shrink-0" /> : <Award className="h-4 w-4 shrink-0" />}
+                <span>
+                  {passed === null
+                    ? "Fact-ID audit result unavailable for this brief"
+                    : `Fact-ID audit: ${typeof score === "number" ? score : "—"}% of findings cite known facts`}
+                </span>
+              </div>
+              {rejected > 0 && (
+                <span className="text-rose-600 dark:text-rose-400 font-mono text-xs font-bold">
+                  Removed {rejected} finding{rejected === 1 ? "" : "s"} citing unknown Fact IDs
+                </span>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Main Content Stream */}

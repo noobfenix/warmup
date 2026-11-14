@@ -20,8 +20,8 @@ import {
   CheckCircle2,
   Wind,
 } from "lucide-react";
-import { parseRawTableInput, normalizeTableData, heuristicMapColumns } from "@/lib/table-parser";
-import { analyzeAirQualityData, type AnalysisOutput } from "@/lib/flags-and-facts";
+import { analyzeRawTable } from "@/lib/analyze-table";
+import type { AnalysisOutput } from "@/lib/flags-and-facts";
 import { computeAirQualityDiff, type AirQualityDiff } from "@/lib/diff-engine";
 import type { CivicBriefResponse } from "@/lib/brief-validator";
 import type { SampleDataset } from "@/config/sample-datasets";
@@ -97,6 +97,11 @@ export default function CivicStudioPage() {
   const [brief, setBrief] = useState<CivicBriefResponse | null>(null);
   const [auditInfo, setAuditInfo] = useState<any>(null);
   const [diff, setDiff] = useState<AirQualityDiff | null>(null);
+  const [briefParams, setBriefParams] = useState<{
+    audience: typeof audience;
+    language: typeof language;
+    readingLevel: typeof readingLevel;
+  } | null>(null);
 
   // Inspector & UI state
   const [inspectFactId, setInspectFactId] = useState<string | null>(null);
@@ -114,16 +119,12 @@ export default function CivicStudioPage() {
         return;
       }
 
-      const parsed = parseRawTableInput(text);
-      if (parsed.headers.length === 0 || parsed.rows.length === 0) {
+      const analyzed = analyzeRawTable(text);
+      if (!analyzed || analyzed.normalizedRows.length === 0) {
         setError("Could not parse valid tabular headers or rows. Please ensure CSV, TSV, or JSON format.");
         setAnalysis(null);
         return;
       }
-
-      const mapping = heuristicMapColumns(parsed.headers);
-      const normalized = normalizeTableData(parsed, mapping);
-      const analyzed = analyzeAirQualityData(normalized);
 
       setAnalysis(analyzed);
     } catch (err) {
@@ -152,6 +153,9 @@ export default function CivicStudioPage() {
     setSelectedSampleId("");
     setAnalysis(null);
     setBrief(null);
+    setBriefParams(null);
+    setAuditInfo(null);
+    setDiff(null);
     setHighlightedRowIndices([]);
     toast.info("Workbench data cleared.");
   };
@@ -201,8 +205,6 @@ export default function CivicStudioPage() {
         previousRecord?.analysis || null,
         previousRecord?.timestamp
       );
-      setDiff(calculatedDiff);
-
       // Call server API
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (customKey.trim()) {
@@ -230,7 +232,9 @@ export default function CivicStudioPage() {
       }
 
       const generatedBrief: CivicBriefResponse = responseData.data;
+      setDiff(calculatedDiff);
       setBrief(generatedBrief);
+      setBriefParams({ audience, language, readingLevel });
       setAuditInfo(responseData.audit);
       setActiveTab("brief");
 
@@ -270,9 +274,24 @@ export default function CivicStudioPage() {
   };
 
   const selectedFact = analysis?.facts.find((f) => f.id === inspectFactId) || null;
+  const briefIsStale =
+    !!brief &&
+    !!briefParams &&
+    (briefParams.audience !== audience ||
+      briefParams.language !== language ||
+      briefParams.readingLevel !== readingLevel);
 
   return (
-    <main className="min-h-screen bg-background text-foreground px-4 sm:px-6 lg:px-8 py-8 max-w-7xl mx-auto space-y-8">
+    <main id="main-content" tabIndex={-1} className="min-h-screen bg-background text-foreground px-4 sm:px-6 lg:px-8 py-8 max-w-7xl mx-auto space-y-8 outline-none">
+      {/* Screen Reader Live Status Announcer */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {isLoading
+          ? "Synthesizing civic briefing and running factual grounding audit..."
+          : brief
+          ? "Civic briefing generated. Fact-ID audit result is shown above the brief."
+          : ""}
+      </div>
+
       {/* Studio Header Card */}
       <section className="rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-2 max-w-3xl">
@@ -284,7 +303,7 @@ export default function CivicStudioPage() {
               Deterministic Facts [F1..Fn]
             </span>
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
-              Zero Hallucination Audit
+              Fact-ID Citation Audit
             </span>
           </div>
 
@@ -392,7 +411,7 @@ export default function CivicStudioPage() {
             {analysis ? (
               <div className="flex items-center justify-between text-xs text-muted-foreground font-mono bg-muted/50 p-3 rounded-lg border border-border flex-wrap gap-2">
                 <span>Rows: <strong className="text-foreground">{analysis.summary.totalRows}</strong></span>
-                <span>Flags: <strong className={analysis.summary.flaggedRowsCount > 0 ? "text-amber-500" : "text-emerald-500"}>{analysis.summary.flaggedRowsCount}</strong></span>
+                <span>Flagged rows: <strong className={analysis.summary.flaggedRowsCount > 0 ? "text-amber-500" : "text-emerald-500"}>{analysis.summary.flaggedRowsCount}</strong></span>
                 <span>
                   Avg AQI:{" "}
                   <strong className="text-foreground">
@@ -646,8 +665,28 @@ export default function CivicStudioPage() {
           {/* Tab Content Stream */}
           {activeTab === "brief" && (
             <>
+              {brief && analysis && briefIsStale && (
+                <div
+                  role="status"
+                  className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between gap-3 flex-wrap"
+                >
+                  <span>
+                    Audience, language or reading level changed since this brief was generated. Regenerate to update the actions and advisory.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleGenerateBrief}
+                    disabled={isLoading}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
+                    <span>Regenerate</span>
+                  </button>
+                </div>
+              )}
               {brief && analysis ? (
                 <BriefView
+                  lang={briefParams?.language ?? "en"}
                   brief={brief}
                   facts={analysis.facts}
                   onSelectFact={(fId) => setInspectFactId(fId)}

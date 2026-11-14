@@ -3,6 +3,58 @@
 import React from "react";
 import { Building2, School, Home, CheckCircle2, Database, ArrowRight } from "lucide-react";
 import { SAMPLE_DATASETS, type SampleDataset } from "@/config/sample-datasets";
+import { computeDatasetStats, type DatasetStats } from "@/lib/analyze-table";
+
+interface SampleCardMeta {
+  icon: React.ReactNode;
+  badge: string;
+  badgeColor: string;
+  stats: string;
+}
+
+const MAX_STATIONS_SHOWN = 3;
+
+/** Badge and stats line derived from the dataset itself, so card numbers always match the analysis. */
+export function describeDataset(stats: DatasetStats | null): Pick<SampleCardMeta, "badge" | "stats"> {
+  if (!stats) return { badge: "Unparseable", stats: "No rows could be parsed" };
+  const shown = stats.stations.slice(0, MAX_STATIONS_SHOWN).join(", ");
+  const more = stats.stations.length > MAX_STATIONS_SHOWN ? ` +${stats.stations.length - MAX_STATIONS_SHOWN} more` : "";
+  const badge =
+    stats.flagCount > 0
+      ? `${stats.flagCount} sensor flag${stats.flagCount === 1 ? "" : "s"}`
+      : stats.category
+      ? `Avg: ${stats.category}`
+      : "No flags";
+  return { badge, stats: `${stats.rowCount} rows • ${shown}${more}` };
+}
+
+const STYLE_BY_ID: Record<string, Pick<SampleCardMeta, "icon" | "badgeColor">> = {
+  "delhi-ward": {
+    icon: <Building2 className="h-5 w-5 text-blue-500" aria-hidden="true" />,
+    badgeColor: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+  },
+  "bengaluru-society": {
+    icon: <Home className="h-5 w-5 text-emerald-500" aria-hidden="true" />,
+    badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  },
+  "mumbai-schools": {
+    icon: <School className="h-5 w-5 text-amber-500" aria-hidden="true" />,
+    badgeColor: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  },
+};
+
+const DEFAULT_STYLE: Pick<SampleCardMeta, "icon" | "badgeColor"> = {
+  icon: <Database className="h-5 w-5 text-muted-foreground" aria-hidden="true" />,
+  badgeColor: "bg-muted text-muted-foreground border-border",
+};
+
+// Sample data is static, so compute each card's stats once at module load.
+const SAMPLE_META: Record<string, SampleCardMeta> = Object.fromEntries(
+  SAMPLE_DATASETS.map((sample) => [
+    sample.id,
+    { ...(STYLE_BY_ID[sample.id] ?? DEFAULT_STYLE), ...describeDataset(computeDatasetStats(sample.data)) },
+  ])
+);
 
 interface SampleButtonsProps {
   onSelectSample: (sample: SampleDataset) => void;
@@ -10,39 +62,6 @@ interface SampleButtonsProps {
 }
 
 export function SampleButtons({ onSelectSample, selectedSampleId }: SampleButtonsProps) {
-  const getMetadata = (id: string) => {
-    switch (id) {
-      case "delhi-ward":
-        return {
-          icon: <Building2 className="h-5 w-5 text-blue-500" />,
-          badge: "Severe Exceedances",
-          badgeColor: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
-          stats: "10 Rows • Anand Vihar, Lodhi Road, Connaught Place",
-        };
-      case "bengaluru-society":
-        return {
-          icon: <Home className="h-5 w-5 text-emerald-500" />,
-          badge: "Estate Baseline",
-          badgeColor: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-          stats: "9 Rows • Wing A, Central Park, Clubhouse, Generator Yard",
-        };
-      case "mumbai-schools":
-        return {
-          icon: <School className="h-5 w-5 text-amber-500" />,
-          badge: "4 Sensor Flags",
-          badgeColor: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-          stats: "10 Rows • Bandra, Chembur, Worli • Transducer Anomaly Data",
-        };
-      default:
-        return {
-          icon: <Database className="h-5 w-5 text-muted-foreground" />,
-          badge: "Preset",
-          badgeColor: "bg-muted text-muted-foreground border-border",
-          stats: "Verified Civic Data",
-        };
-    }
-  };
-
   const getCleanName = (name: string) => name.replace(/^\[Sample\]\s*/i, "");
 
   return (
@@ -60,7 +79,7 @@ export function SampleButtons({ onSelectSample, selectedSampleId }: SampleButton
       <div className="flex flex-col gap-2.5">
         {SAMPLE_DATASETS.map((sample) => {
           const isSelected = selectedSampleId === sample.id;
-          const meta = getMetadata(sample.id);
+          const meta = SAMPLE_META[sample.id];
 
           return (
             <div

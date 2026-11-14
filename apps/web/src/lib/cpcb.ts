@@ -42,6 +42,10 @@ export function getAqiCategory(aqi: number): AqiCategoryInfo {
   return CPCB_CATEGORIES[0]; // Good fallback
 }
 
+function interpolate(c: number, cLow: number, cHigh: number, iLow: number, iHigh: number): number {
+  return ((iHigh - iLow) / (cHigh - cLow)) * (c - cLow) + iLow;
+}
+
 /**
  * Computes the CPCB sub-index for a specific pollutant using linear interpolation:
  * Ip = [ (I_hi - I_lo) / (B_hi - B_lo) ] * (Cp - B_lo) + I_lo
@@ -65,16 +69,20 @@ export function calculateSubIndex(
     return 0;
   }
 
+  let previous: BreakpointRange | null = null;
   for (const bp of breakpoints) {
     if (concentration >= bp.cLow && concentration <= bp.cHigh) {
       if (bp.cHigh === bp.cLow) {
         return bp.iLow;
       }
-      const subIndex =
-        ((bp.iHigh - bp.iLow) / (bp.cHigh - bp.cLow)) * (concentration - bp.cLow) +
-        bp.iLow;
-      return Math.round(subIndex);
+      return Math.round(interpolate(concentration, bp.cLow, bp.cHigh, bp.iLow, bp.iHigh));
     }
+    // CPCB bands are published with integer gaps (e.g. PM2.5 30 | 31). Decimal readings that fall
+    // between bands are interpolated across the gap so they still receive a sub-index.
+    if (previous && concentration > previous.cHigh && concentration < bp.cLow) {
+      return Math.round(interpolate(concentration, previous.cHigh, bp.cLow, previous.iHigh, bp.iLow));
+    }
+    previous = bp;
   }
 
   // If concentration exceeds the highest breakpoint, extrapolate up to max 500

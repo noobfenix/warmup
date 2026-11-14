@@ -32,6 +32,7 @@ export function FactModal({ fact, onClose, allRows, onHighlightRows }: FactModal
       role="dialog"
       aria-modal="true"
       aria-labelledby="fact-modal-title"
+      aria-describedby="fact-modal-statement"
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-150"
     >
       <div className="bg-card text-card-foreground border border-border w-full max-w-2xl rounded-xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150">
@@ -51,8 +52,9 @@ export function FactModal({ fact, onClose, allRows, onHighlightRows }: FactModal
           <button
             type="button"
             onClick={onClose}
+            autoFocus
             aria-label="Close fact inspector"
-            className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted transition cursor-pointer"
+            className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-muted transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <X className="h-4 w-4" />
           </button>
@@ -65,7 +67,7 @@ export function FactModal({ fact, onClose, allRows, onHighlightRows }: FactModal
             <span className="text-xs font-semibold text-primary block uppercase tracking-wide">
               Mathematically Verified Statement
             </span>
-            <p className="text-sm font-medium text-foreground leading-relaxed text-pretty">
+            <p id="fact-modal-statement" className="text-sm font-medium text-foreground leading-relaxed text-pretty">
               &ldquo;{fact.statement}&rdquo;
             </p>
           </div>
@@ -109,16 +111,17 @@ export function FactModal({ fact, onClose, allRows, onHighlightRows }: FactModal
             </div>
 
             <div className="border border-border rounded-lg overflow-x-auto max-h-56 bg-background">
-              <table className="w-full text-xs text-left">
+              <table className="w-full text-xs text-left" aria-label={`Source rows for ${fact.id}`}>
+                <caption className="sr-only">Audited source telemetry rows for fact {fact.id}</caption>
                 <thead className="bg-muted/70 text-muted-foreground font-mono text-[11px] uppercase tracking-wide border-b border-border">
                   <tr>
-                    <th className="p-2.5 pl-3">Row #</th>
-                    <th className="p-2.5">Station</th>
-                    <th className="p-2.5">Timestamp</th>
-                    <th className="p-2.5 font-mono text-right">PM2.5</th>
-                    <th className="p-2.5 font-mono text-right">PM10</th>
-                    <th className="p-2.5 font-mono text-right">AQI</th>
-                    <th className="p-2.5 pr-3">CPCB</th>
+                    <th scope="col" className="p-2.5 pl-3">Row #</th>
+                    <th scope="col" className="p-2.5">Station</th>
+                    <th scope="col" className="p-2.5">Timestamp</th>
+                    <th scope="col" className="p-2.5 font-mono text-right">PM2.5</th>
+                    <th scope="col" className="p-2.5 font-mono text-right">PM10</th>
+                    <th scope="col" className="p-2.5 font-mono text-right">AQI</th>
+                    <th scope="col" className="p-2.5 pr-3">CPCB</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
