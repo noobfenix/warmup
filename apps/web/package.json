@@ -32,6 +32,7 @@
     "@types/react-dom": "^19.2.7",
     "@warmup/config": "*",
     "tailwindcss": "^4.3.3",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
   }
 }
