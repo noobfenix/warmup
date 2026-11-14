@@ -113,24 +113,24 @@ export function TableViewer({ rows, highlightedRowIndices = [], onSelectRow }: T
               return (
                 <tr
                   key={row.sourceRowIndex}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`Select row ${row.sourceRowIndex} for ${row.station}`}
                   onClick={() => onSelectRow && onSelectRow(row.sourceRowIndex)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onSelectRow && onSelectRow(row.sourceRowIndex);
-                    }
-                  }}
-                  className={`transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                    isHighlighted
+                  className={`transition-colors cursor-pointer ${isHighlighted
                       ? "bg-primary/15 font-medium ring-1 ring-inset ring-primary/40"
                       : "bg-card hover:bg-muted/30"
-                  }`}
+                    }`}
                 >
                   <td className="p-3 pl-4 font-mono text-xs text-muted-foreground font-bold">
-                    #{row.sourceRowIndex}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectRow && onSelectRow(row.sourceRowIndex);
+                      }}
+                      aria-label={`Inspect row ${row.sourceRowIndex} for station ${row.station}`}
+                      className="font-mono text-xs font-bold text-muted-foreground hover:text-primary transition-colors cursor-pointer rounded px-1 -ml-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      #{row.sourceRowIndex}
+                    </button>
                   </td>
                   <td className="p-3 font-semibold text-foreground">{row.station}</td>
                   <td className="p-3 text-muted-foreground font-mono text-xs">
@@ -140,22 +140,22 @@ export function TableViewer({ rows, highlightedRowIndices = [], onSelectRow }: T
                     {showRaw
                       ? row.rawValues["PM2.5"] || "—"
                       : row.values["PM2.5"] !== null && row.values["PM2.5"] !== undefined
-                      ? row.values["PM2.5"]
-                      : "—"}
+                        ? row.values["PM2.5"]
+                        : "—"}
                   </td>
                   <td className="p-3 font-mono text-right tabular-nums text-foreground/90">
                     {showRaw
                       ? row.rawValues["PM10"] || "—"
                       : row.values["PM10"] !== null && row.values["PM10"] !== undefined
-                      ? row.values["PM10"]
-                      : "—"}
+                        ? row.values["PM10"]
+                        : "—"}
                   </td>
                   <td className="p-3 font-mono text-right tabular-nums text-foreground/90">
                     {showRaw
                       ? row.rawValues["NO2"] || "—"
                       : row.values["NO2"] !== null && row.values["NO2"] !== undefined
-                      ? row.values["NO2"]
-                      : "—"}
+                        ? row.values["NO2"]
+                        : "—"}
                   </td>
                   <td className="p-3 font-mono text-right font-bold tabular-nums">
                     {row.calculatedAqi !== null ? (

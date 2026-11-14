@@ -95,55 +95,50 @@ export function FlagsPanel({ flags, onSelectRow }: FlagsPanelProps) {
             <button
               type="button"
               onClick={() => setFilterType("all")}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
-                filterType === "all"
+              className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${filterType === "all"
                   ? "bg-primary text-primary-foreground shadow-xs font-semibold"
                   : "bg-muted text-muted-foreground hover:text-foreground border border-border"
-              }`}
+                }`}
             >
               All ({flags.length})
             </button>
             <button
               type="button"
               onClick={() => setFilterType("impossible")}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
-                filterType === "impossible"
+              className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${filterType === "impossible"
                   ? "bg-rose-500 text-white font-semibold shadow-xs"
                   : "bg-rose-500/10 text-rose-800 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/25"
-              }`}
+                }`}
             >
               Impossible Readings ({counts.impossible})
             </button>
             <button
               type="button"
               onClick={() => setFilterType("stuck_value")}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
-                filterType === "stuck_value"
+              className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${filterType === "stuck_value"
                   ? "bg-amber-500 text-black font-semibold shadow-xs"
                   : "bg-amber-500/10 text-amber-900 dark:text-amber-300 hover:bg-amber-500/20 border border-amber-500/25"
-              }`}
+                }`}
             >
               Stuck Values ({counts.stuck_value})
             </button>
             <button
               type="button"
               onClick={() => setFilterType("missing")}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
-                filterType === "missing"
+              className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${filterType === "missing"
                   ? "bg-sky-500 text-white font-semibold shadow-xs"
                   : "bg-sky-500/10 text-sky-800 dark:text-sky-300 hover:bg-sky-500/20 border border-sky-500/25"
-              }`}
+                }`}
             >
               Missing Values ({counts.missing})
             </button>
             <button
               type="button"
               onClick={() => setFilterType("duplicate")}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
-                filterType === "duplicate"
+              className={`px-3 py-1 rounded-md text-xs font-medium transition cursor-pointer ${filterType === "duplicate"
                   ? "bg-orange-500 text-white font-semibold shadow-xs"
                   : "bg-orange-500/10 text-orange-900 dark:text-orange-300 hover:bg-orange-500/20 border border-orange-500/25"
-              }`}
+                }`}
             >
               Duplicates ({counts.duplicate})
             </button>
@@ -155,10 +150,10 @@ export function FlagsPanel({ flags, onSelectRow }: FlagsPanelProps) {
               <button
                 key={flag.id}
                 type="button"
-                aria-label={`Inspect flagged row ${flag.sourceRowIndex}: ${flag.description}`}
                 onClick={() => onSelectRow && onSelectRow(flag.sourceRowIndex)}
                 className="w-full text-left group flex items-start justify-between gap-3 p-3 rounded-lg border border-border bg-background hover:border-amber-500/40 hover:bg-amber-500/5 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary"
               >
+                <span className="sr-only">Inspect flagged row #{flag.sourceRowIndex}: {flag.type.replace("_", " ")} at station {flag.station}. </span>
                 <div className="flex items-start gap-2.5">
                   <span
                     className={`text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded border shrink-0 ${getBadgeColor(

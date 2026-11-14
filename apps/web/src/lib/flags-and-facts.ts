@@ -106,20 +106,20 @@ export function detectDataFlags(rows: NormalizedRow[]): DataFlag[] {
   };
 
   // Pre-index columns to check once across the entire dataset to eliminate O(N * K) redundant lookups
-  const firstRow = rows[0];
-  const columnsToCheck: { standardKey: keyof typeof firstRow.values; displayHeader: string }[] = [];
+  const firstRow = rows[0] as NormalizedRow | undefined;
+  const columnsToCheck: { standardKey: StandardPollutant | "AQI"; displayHeader: string }[] = [];
 
   if (firstRow) {
     if (firstRow.mappedColumns && firstRow.mappedColumns.length > 0) {
       for (const col of firstRow.mappedColumns) {
         columnsToCheck.push({
-          standardKey: col.standardPollutant as keyof typeof firstRow.values,
+          standardKey: col.standardPollutant,
           displayHeader: col.sourceColumn,
         });
       }
     } else {
-      const rawKeys = Object.keys(firstRow.rawValues);
-      const checkedKeys: (keyof typeof firstRow.values)[] = [
+      const rawKeys = Object.keys(firstRow.rawValues || {});
+      const checkedKeys: (StandardPollutant | "AQI")[] = [
         "PM2.5",
         "PM10",
         "NO2",
@@ -399,9 +399,8 @@ export function computeFacts(
     id: `F${factCounter++}`,
     category: "hotspot",
     title: `Peak Pollution Hotspot at ${peakRow.station}`,
-    statement: `The highest recorded AQI was ${peakRow.calculatedAqi} (${peakCategory.name}) observed at "${peakRow.station}"${
-      peakRow.timestamp ? ` at ${peakRow.timestamp}` : ""
-    }, driven primarily by ${peakRow.dominantPollutant || "PM2.5"}.`,
+    statement: `The highest recorded AQI was ${peakRow.calculatedAqi} (${peakCategory.name}) observed at "${peakRow.station}"${peakRow.timestamp ? ` at ${peakRow.timestamp}` : ""
+      }, driven primarily by ${peakRow.dominantPollutant || "PM2.5"}.`,
     sourceRowIndices: [peakRow.sourceRowIndex],
     station: peakRow.station,
     metric: "AQI",
@@ -417,9 +416,8 @@ export function computeFacts(
     id: `F${factCounter++}`,
     category: "cleanest_zone",
     title: `Lowest Pollution Zone at ${cleanestRow.station}`,
-    statement: `The cleanest air quality was recorded at "${cleanestRow.station}"${
-      cleanestRow.timestamp ? ` at ${cleanestRow.timestamp}` : ""
-    } with an AQI of ${cleanestRow.calculatedAqi} (${cleanestCategory.name}).`,
+    statement: `The cleanest air quality was recorded at "${cleanestRow.station}"${cleanestRow.timestamp ? ` at ${cleanestRow.timestamp}` : ""
+      } with an AQI of ${cleanestRow.calculatedAqi} (${cleanestCategory.name}).`,
     sourceRowIndices: [cleanestRow.sourceRowIndex],
     station: cleanestRow.station,
     metric: "AQI",

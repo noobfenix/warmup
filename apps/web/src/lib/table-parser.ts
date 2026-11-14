@@ -27,8 +27,8 @@ export interface NormalizedRow {
     sourceColumn: string;
     standardPollutant: StandardPollutant | "AQI";
   }[];
-  isOfficialNaqi?: boolean;
-  naqiCriteriaNote?: string;
+  isOfficialNaqi: boolean;
+  naqiCriteriaNote: string;
 }
 
 export interface ParsedRawTable {
@@ -103,8 +103,8 @@ export function parseRawTableInput(rawText: string): ParsedRawTable {
       const arrayData = Array.isArray(parsedJson)
         ? parsedJson
         : parsedJson.data && Array.isArray(parsedJson.data)
-        ? parsedJson.data
-        : [parsedJson];
+          ? parsedJson.data
+          : [parsedJson];
 
       if (arrayData.length > 0 && typeof arrayData[0] === "object") {
         const headers: string[] = Array.from(
@@ -253,6 +253,14 @@ export function normalizeTableData(
 ): NormalizedRow[] {
   const normalized: NormalizedRow[] = [];
 
+  // Compute active mapped columns once for the entire table to eliminate redundant allocations
+  const activeMappedColumns = mapping.mappings
+    .filter((m) => m.standardPollutant !== "UNKNOWN")
+    .map((m) => ({
+      sourceColumn: m.sourceColumn,
+      standardPollutant: m.standardPollutant as StandardPollutant | "AQI",
+    }));
+
   parsed.rows.forEach((row, index) => {
     const sourceRowIndex = index + 1; // 1-based index (header is line 0)
     const station = row[mapping.stationColumn] || `Station-${sourceRowIndex}`;
@@ -282,13 +290,6 @@ export function normalizeTableData(
 
     const aqiCalc = calculateRowAqi(values);
     const categoryInfo = aqiCalc.aqi !== null ? getAqiCategory(aqiCalc.aqi) : null;
-
-    const activeMappedColumns = mapping.mappings
-      .filter((m) => m.standardPollutant !== "UNKNOWN")
-      .map((m) => ({
-        sourceColumn: m.sourceColumn,
-        standardPollutant: m.standardPollutant as StandardPollutant | "AQI",
-      }));
 
     normalized.push({
       sourceRowIndex,

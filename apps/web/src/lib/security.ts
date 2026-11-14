@@ -23,6 +23,7 @@ export class InMemoryRateLimiter {
   private windowMs: number;
   private maxRequests: number;
   private maxTrackedClients: number;
+  private lastCleanup = 0;
 
   constructor(
     options: RateLimiterOptions = {
@@ -45,9 +46,10 @@ export class InMemoryRateLimiter {
     const identifier = (rawIdentifier || "127.0.0.1").trim().slice(0, 64);
     const now = Date.now();
 
-    // Auto-prune when approaching capacity limit to prevent DoS memory exhaustion
-    if (this.records.size >= this.maxTrackedClients * 0.8) {
+    // Auto-prune when approaching capacity limit, throttled to at most once per 30s to prevent event-loop blocking
+    if (this.records.size >= this.maxTrackedClients * 0.8 && now - this.lastCleanup > 30_000) {
       this.cleanup();
+      this.lastCleanup = now;
     }
 
     // Hard ceiling: drop oldest entries if still at or above maximum capacity
